@@ -68,7 +68,7 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
     -DANDROID_PLATFORM=android-16 \
     "$TDLIB_DIR"
 
-  cmake --build . --target tdjni
+  cmake --build . || exit 1
 
   OUT_DIR="$SCRIPT_DIR/tdlib/libs/$ABI"
   mkdir -p "$OUT_DIR"
