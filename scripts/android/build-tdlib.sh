@@ -31,6 +31,8 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
   mkdir -p build-$ABI
   cd build-$ABI
 
+  TDLIB_DIR="$(cd ../../td >/dev/null 2>&1 ; pwd)"
+
   cmake \
     -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
     -DOPENSSL_ROOT_DIR="$OPENSSL_INSTALL_DIR/$ABI" \
@@ -39,7 +41,7 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
     -DANDROID_ABI=$ABI \
     -DANDROID_STL=$ANDROID_STL \
     -DANDROID_PLATFORM=android-16 \
-    .. || exit 1
+    $TDLIB_DIR || exit 1
 
   cmake --build . --target tdjni || exit 1
 
