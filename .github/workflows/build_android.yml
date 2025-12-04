@@ -2,11 +2,6 @@ name: Build Android
 
 on:
   workflow_call:
-    outputs:
-      arm64: ${{ jobs.build-android.outputs.arm64 }}
-      armeabi: ${{ jobs.build-android.outputs.armeabi }}
-      x86_64: ${{ jobs.build-android.outputs.x86_64 }}
-      x86: ${{ jobs.build-android.outputs.x86 }}
 
 jobs:
   build-android:
@@ -47,7 +42,7 @@ jobs:
         working-directory: scripts/android
         run: ./build-openssl.sh SDK 23.2.8568313 third-party/openssl OpenSSL_1_1_1w
 
-      - name: Build TDLib (minimal)
+      - name: Build TDLib
         working-directory: scripts/android
         run: ./build-tdlib.sh SDK 23.2.8568313 third-party/openssl c++_static
 
