@@ -6,14 +6,10 @@ ANDROID_NDK_VERSION=${2:-23.2.8568313}
 OPENSSL_INSTALL_DIR=${3:-third-party/openssl}
 ANDROID_STL=${4:-c++_static}
 
-# Determine repo & script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-
-# Resolve TDLib directory
 TDLIB_DIR="$REPO_ROOT/td"
 
-# Resolve SDK absolute path
 ANDROID_SDK_ROOT="$(cd "$SCRIPT_DIR/$ANDROID_SDK_ROOT_RAW" && pwd)"
 ANDROID_NDK_ROOT="$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION"
 
@@ -23,33 +19,35 @@ echo "TDLIB_DIR = $TDLIB_DIR"
 echo "Resolved ANDROID_SDK_ROOT = $ANDROID_SDK_ROOT"
 echo "Resolved ANDROID_NDK_ROOT = $ANDROID_NDK_ROOT"
 
-# Check TDLib
 if [ ! -f "$TDLIB_DIR/CMakeLists.txt" ]; then
   echo "❌ TDLib CMakeLists.txt not found at: $TDLIB_DIR"
   exit 1
 fi
 
-# Check NDK toolchain
-if [ ! -f "$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" ]; then
-  echo "❌ NDK toolchain not found at: $ANDROID_NDK_ROOT"
-  exit 1
-fi
-
-# Load environment checks
 source "$SCRIPT_DIR/check-environment.sh"
 
-# Ensure ninja exists
-if ! which ninja >/dev/null 2>&1 ; then
-  echo "❌ ninja not found — install ninja-build"
-  exit 1
-fi
+# -----------------------------------------------------------
+# STEP 1: Generate TDLib source files (required!)
+# -----------------------------------------------------------
+echo "Generating TDLib auto source files…"
 
-PATH="$ANDROID_SDK_ROOT/cmake/3.22.1/bin:$PATH"
+rm -rf "$SCRIPT_DIR/build-native"
+mkdir -p "$SCRIPT_DIR/build-native"
+cd "$SCRIPT_DIR/build-native"
 
-echo "Building TDLib JNI (minimal)…"
+cmake -DTD_GENERATE_SOURCE_FILES=ON "$TDLIB_DIR"
+cmake --build .
+
+cd "$SCRIPT_DIR"
+
+# -----------------------------------------------------------
+# STEP 2: Build TDLib JNI for each ABI
+# -----------------------------------------------------------
 
 rm -rf "$SCRIPT_DIR/tdlib"
 mkdir -p "$SCRIPT_DIR/tdlib/libs"
+
+PATH="$ANDROID_SDK_ROOT/cmake/3.22.1/bin:$PATH"
 
 for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
   echo "----------------------------------------"
@@ -70,13 +68,12 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
     -DANDROID_PLATFORM=android-16 \
     "$TDLIB_DIR"
 
-  cmake --build . || exit 1
+  cmake --build . --target tdjni
 
   OUT_DIR="$SCRIPT_DIR/tdlib/libs/$ABI"
   mkdir -p "$OUT_DIR"
   cp -p libtd*.so "$OUT_DIR/"
 
-  # OpenSSL
   if [ -e "$SCRIPT_DIR/$OPENSSL_INSTALL_DIR/$ABI/lib/libcrypto.so" ]; then
     cp "$SCRIPT_DIR/$OPENSSL_INSTALL_DIR/$ABI/lib/libcrypto.so" "$OUT_DIR/"
     cp "$SCRIPT_DIR/$OPENSSL_INSTALL_DIR/$ABI/lib/libssl.so" "$OUT_DIR/"
