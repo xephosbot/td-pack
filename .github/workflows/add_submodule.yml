@@ -19,7 +19,7 @@ jobs:
 
       - name: Add submodule
         run: |
-          git submodule add -b master https://github.com/tdlib/td source/td
-          git add .gitmodules source/td
+          git submodule add -b master https://github.com/tdlib/td td
+          git add .gitmodules td
           git commit -m "Add TDLib submodule"
           git push origin HEAD:main
