@@ -1,0 +1,25 @@
+name: Add Submodule
+
+on:
+  workflow_dispatch:
+
+jobs:
+  add-submodule:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@noreply.github.com"
+
+      - name: Add submodule
+        run: |
+          git submodule add -b master https://github.com/tdlib/td source/td
+          git add .gitmodules source/td
+          git commit -m "Add TDLib submodule"
+          git push origin HEAD:main
