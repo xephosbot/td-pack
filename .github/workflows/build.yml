@@ -1,0 +1,51 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  android:
+    uses: ./.github/workflows/build_android.yml
+
+  publish-artifacts:
+    needs: android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Download workspace from previous job
+        # ВАЖНО: это позволяет получить файлы build_android
+        uses: actions/download-artifact@v4
+        with:
+          # build_android.yml не создаёт артефактов, но workspace передаётся автоматически
+          # поэтому download-artifact пропускаем — Workspace уже доступен
+          # оставляем шаг пустым на будущее
+          path: .
+
+      - name: Prepare output dirs
+        run: |
+          mkdir -p libs/android/arm64-v8a
+          mkdir -p libs/android/armeabi-v7a
+          mkdir -p libs/android/x86_64
+          mkdir -p libs/android/x86
+
+      - name: Copy Android built files from workspace
+        run: |
+          cp -r ${{ needs.android.outputs.arm64 }}/* libs/android/arm64-v8a/
+          cp -r ${{ needs.android.outputs.armeabi }}/* libs/android/armeabi-v7a/
+          cp -r ${{ needs.android.outputs.x86_64 }}/* libs/android/x86_64/
+          cp -r ${{ needs.android.outputs.x86 }}/* libs/android/x86/
+
+      - name: Add and commit built libs
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@noreply.github.com"
+
+          git add libs/
+          git commit -m "Add built Android native libraries"
+          git push
