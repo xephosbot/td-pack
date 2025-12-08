@@ -27,6 +27,11 @@ jobs:
           ndk-version: r26d
           link-to-sdk: true
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf
+
       - name: Build OpenSSL
         run: |
           chmod +x build-openssl-android.sh
