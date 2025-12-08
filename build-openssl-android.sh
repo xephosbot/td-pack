@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
 
-ANDROID_SDK_ROOT=${1:-SDK}
-ANDROID_NDK_VERSION=${2:-23.2.8568313}
-OPENSSL_INSTALL_DIR=${3:-third-party/openssl}
-OPENSSL_VERSION=${4:-OpenSSL_1_1_1w} # openssl-3.3.0
+ANDROID_SDK_ROOT=${1:-/Users/xephosbot/Library/Android/sdk}
+ANDROID_NDK_VERSION=${2:-29.0.14206865}
+OPENSSL_SOURCE_DIR=${3:-openssl}
+OPENSSL_INSTALL_DIR=${4:-third-party/openssl}
 BUILD_SHARED_LIBS=$5
 
-if [ ! -d "$ANDROID_SDK_ROOT" ] ; then
-  echo "Error: directory \"$ANDROID_SDK_ROOT\" doesn't exist. Run ./fetch-sdk.sh first, or provide a valid path to Android SDK."
-  exit 1
-fi
+cd "$(dirname "$0")"
+ROOT_DIR="$(pwd)"
+
+OPENSSL_INSTALL_DIR="$ROOT_DIR/$OPENSSL_INSTALL_DIR/android"
 
 if [ -e "$OPENSSL_INSTALL_DIR" ] ; then
   echo "Error: file or directory \"$OPENSSL_INSTALL_DIR\" already exists. Delete it manually to proceed."
   exit 1
 fi
-
-source ./check-environment.sh || exit 1
 
 if [[ "$OS_NAME" == "win" ]] && [[ "$BUILD_SHARED_LIBS" ]] ; then
   echo "Error: OpenSSL shared libraries can't be built on Windows because of 'The command line is too long.' error during build. You can run the script in WSL instead."
@@ -30,23 +28,31 @@ OPENSSL_INSTALL_DIR="$(cd "$(dirname -- "$OPENSSL_INSTALL_DIR")" >/dev/null; pwd
 
 cd $(dirname $0)
 
-echo "Downloading OpenSSL sources..."
-rm -f $OPENSSL_VERSION.tar.gz || exit 1
-$WGET https://github.com/openssl/openssl/archive/refs/tags/$OPENSSL_VERSION.tar.gz || exit 1
-rm -rf ./openssl-$OPENSSL_VERSION || exit 1
-tar xzf $OPENSSL_VERSION.tar.gz || exit 1
-rm $OPENSSL_VERSION.tar.gz || exit 1
-cd openssl-$OPENSSL_VERSION
+echo "Using OpenSSL sources from local directory..."
 
-export ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION  # for OpenSSL 3.*.*
-export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT                           # for OpenSSL 1.1.1
+if [ ! -d "$OPENSSL_SOURCE_DIR" ]; then
+  echo "Error: directory \"$OPENSSL_SOURCE_DIR\" doesn't exist."
+  exit 1
+fi
+cd "$OPENSSL_SOURCE_DIR" || exit 1
+
+export ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION
+export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
+
+# Determine HOST_ARCH
+if [[ "$OSTYPE" == "linux"* ]] ; then
+  HOST_ARCH="linux-x86_64"
+elif [[ "$OSTYPE" == "darwin"* ]] ; then
+  HOST_ARCH="darwin-x86_64"
+else
+  echo "Error: Unsupported OS for this script."
+  exit 1
+fi
+
 PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$HOST_ARCH/bin:$PATH
 
 if ! clang --help >/dev/null 2>&1 ; then
   echo "Error: failed to run clang from Android NDK."
-  if [[ "$OS_NAME" == "linux" ]] ; then
-    echo "Prebuilt Android NDK binaries are linked against glibc, so glibc must be installed."
-  fi
   exit 1
 fi
 
@@ -63,12 +69,16 @@ SHARED_BUILD_OPTION=$([ "$BUILD_SHARED_LIBS" ] && echo "shared" || echo "no-shar
 
 for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
   if [[ $ABI == "x86" ]] ; then
+    export ANDROID_NDK=$ANDROID_NDK_ROOT
     ./Configure android-x86 ${SHARED_BUILD_OPTION} -U__ANDROID_API__ -D__ANDROID_API__=$ANDROID_API32 || exit 1
   elif [[ $ABI == "x86_64" ]] ; then
+    export ANDROID_NDK=$ANDROID_NDK_ROOT
     LDFLAGS=-Wl,-z,max-page-size=16384 ./Configure android-x86_64 ${SHARED_BUILD_OPTION} -U__ANDROID_API__ -D__ANDROID_API__=$ANDROID_API64 || exit 1
   elif [[ $ABI == "armeabi-v7a" ]] ; then
+    export ANDROID_NDK=$ANDROID_NDK_ROOT
     ./Configure android-arm ${SHARED_BUILD_OPTION} -U__ANDROID_API__ -D__ANDROID_API__=$ANDROID_API32 -D__ARM_MAX_ARCH__=8 || exit 1
   elif [[ $ABI == "arm64-v8a" ]] ; then
+    export ANDROID_NDK=$ANDROID_NDK_ROOT
     LDFLAGS=-Wl,-z,max-page-size=16384 ./Configure android-arm64 ${SHARED_BUILD_OPTION} -U__ANDROID_API__ -D__ANDROID_API__=$ANDROID_API64 || exit 1
   fi
 
@@ -87,7 +97,3 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
 
   make distclean || exit 1
 done
-
-cd ..
-
-rm -rf ./openssl-$OPENSSL_VERSION || exit 1
