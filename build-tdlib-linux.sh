@@ -21,6 +21,21 @@ if [ ! -d "$OPENSSL_INSTALL_DIR" ]; then
   exit 1
 fi
 
+echo "Generating TDLib auto files (host build)..."
+
+HOST_BUILD_DIR="build-tdlib-host"
+rm -rf "$HOST_BUILD_DIR"
+mkdir "$HOST_BUILD_DIR"
+cd "$HOST_BUILD_DIR" || exit 1
+
+cmake "$TD_SOURCE_DIR" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DTD_ENABLE_JNI=OFF || exit 1
+
+cmake --build . --target tl_generate --parallel 8 || exit 1
+
+cd "$ROOT_DIR" || exit 1
+
 # Check tools
 if ! command -v cmake &> /dev/null; then
     echo "cmake not found. Install with: sudo apt install cmake"
