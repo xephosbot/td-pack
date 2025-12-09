@@ -34,10 +34,16 @@ for ARCH in x86_64 arm64; do
     make distclean >/dev/null 2>&1 || true
 
     CONFIGURE_TARGET=""
-    if [ "$ARCH" == "x86_64" ]; then
-        CONFIGURE_TARGET="linux-x86_64"
-    else
+    if [ "$ARCH" == "arm64" ]; then
         CONFIGURE_TARGET="linux-aarch64"
+    
+        export CC=aarch64-linux-gnu-gcc
+        export CXX=aarch64-linux-gnu-g++
+        export AR=aarch64-linux-gnu-ar
+        export RANLIB=aarch64-linux-gnu-ranlib
+        export LD=aarch64-linux-gnu-ld
+    else
+        CONFIGURE_TARGET="linux-x86_64"
     fi
 
     ./Configure "$CONFIGURE_TARGET" \
