@@ -91,10 +91,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gperf cmake ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-      - name: Build OpenSSL (Linux)
+      - name: Build OpenSSL
         run: |
           chmod +x build-openssl-linux.sh
           ./build-openssl-linux.sh openssl third-party/openssl
+
+      - name: Build TDLib
+        run: |
+          chmod +x build-tdlib-macos.sh
+          ./build-tdlib-macos.sh td third-party/openssl
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
