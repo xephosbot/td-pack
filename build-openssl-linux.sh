@@ -42,8 +42,6 @@ for ARCH in x86_64 arm64; do
         export AR=aarch64-linux-gnu-ar
         export RANLIB=aarch64-linux-gnu-ranlib
         export LD=aarch64-linux-gnu-ld
-        export ZLIB_LIBRARY=/usr/lib/aarch64-linux-gnu/libz.so
-        export ZLIB_INCLUDE_DIR=/usr/include/aarch64-linux-gnu
     else
         CONFIGURE_TARGET="linux-x86_64"
     fi
