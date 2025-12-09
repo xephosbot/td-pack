@@ -30,6 +30,10 @@ if ! command -v gperf &> /dev/null; then
     echo "gperf not found. Please install it (e.g. brew install gperf)"
     exit 1
 fi
+if ! command -v strip &> /dev/null; then
+    echo "strip not found. Please install it (e.g. brew install strip)"
+    exit 1
+fi
 
 # Clean output directory for macOS
 rm -rf tdlib/macos
@@ -60,16 +64,32 @@ for ARCH in arm64 x86_64; do
         -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
         -DTD_ENABLE_JNI=OFF \
-        -DTD_ENABLE_LTO=ON \
+        -DTD_ENABLE_LTO=OFF \
         || exit 1
 
     # Build and Install
     echo "Building for $ARCH..."
-    cmake --build . --target install --parallel 8 || exit 1
-    
+    cmake --build . --target tdjson_static -j$(sysctl -n hw.ncpu) || exit 1
+
     cd "$ROOT_DIR" || exit 1
 
-    # Clean build directory to save space
+    mkdir -p "$INSTALL_DIR/lib"
+    mkdir -p "$INSTALL_DIR/include"
+
+    cp -v "$BUILD_DIR"/*.a "$BUILD_DIR"/*/*.a "$INSTALL_DIR/lib" 2>/dev/null || true
+    # Copy OpenSSL static libraries
+    cp -v "$OPENSSL_ARCH_DIR/lib/libcrypto.a" "$INSTALL_DIR/lib" 2>/dev/null || true
+    cp -v "$OPENSSL_ARCH_DIR/lib/libssl.a"    "$INSTALL_DIR/lib" 2>/dev/null || true
+    mkdir -p "$INSTALL_DIR/include/td/telegram"
+    cp -v "$BUILD_DIR"/td/telegram/tdjson_export.h "$INSTALL_DIR/include/td/telegram"
+    cp -v "$TD_SOURCE_DIR"/td/telegram/td_json_client.h "$INSTALL_DIR/include"
+    cp -v "$TD_SOURCE_DIR"/td/telegram/td_log.h "$INSTALL_DIR/include"
+
+    echo "Stripping static libraries..."
+    if [ -d "$INSTALL_DIR/lib" ]; then
+        strip -S "$INSTALL_DIR"/lib/*.a 2>/dev/null || true
+    fi
+
     rm -rf "$BUILD_DIR"
 done
 

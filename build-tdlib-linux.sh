@@ -29,7 +29,7 @@ mkdir "$HOST_BUILD_DIR"
 cd "$HOST_BUILD_DIR" || exit 1
 
 cmake "$TD_SOURCE_DIR"
-cmake --build . --target prepare_cross_compiling --parallel 8 || exit 1
+cmake --build . --target prepare_cross_compiling -j$(sysctl -n hw.ncpu) || exit 1
 
 cd "$ROOT_DIR" || exit 1
 
@@ -52,6 +52,8 @@ for ARCH in x86_64 arm64; do
 
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR"
+    mkdir -p "$INSTALL_DIR/lib"
+    mkdir -p "$INSTALL_DIR/include/td/telegram"
 
     cd "$BUILD_DIR" || exit 1
 
@@ -63,6 +65,7 @@ for ARCH in x86_64 arm64; do
         export AR=aarch64-linux-gnu-ar
         export RANLIB=aarch64-linux-gnu-ranlib
         export LD=aarch64-linux-gnu-ld
+
         export ZLIB_ROOT=/usr/local/arm64
         export ZLIB_LIBRARY=/usr/local/arm64/lib/libz.a
         export ZLIB_INCLUDE_DIR=/usr/local/arm64/include
@@ -84,12 +87,20 @@ for ARCH in x86_64 arm64; do
         -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
         -DTD_ENABLE_JNI=OFF \
-        -DTD_ENABLE_LTO=ON \
+        -DTD_ENABLE_LTO=OFF \
         $CMAKE_SYSTEM_FLAGS \
         || exit 1
 
     echo "Building TDLib for $ARCH..."
-    cmake --build . --target install || exit 1
+    cmake --build . --target tdjson_static -j$(sysctl -n hw.ncpu) || exit 1
+
+    cp -v "$BUILD_DIR"/*.a "$INSTALL_DIR/lib" 2>/dev/null || true
+    cp -v "$BUILD_DIR"/*/*.a "$INSTALL_DIR/lib" 2>/dev/null || true
+    cp -v "$OPENSSL_ARCH_DIR/lib/libcrypto.a" "$INSTALL_DIR/lib" || exit 1
+    cp -v "$OPENSSL_ARCH_DIR/lib/libssl.a" "$INSTALL_DIR/lib" || exit 1
+    cp -v "$TD_SOURCE_DIR/td/telegram/td_json_client.h" "$INSTALL_DIR/include/td/telegram"
+    cp -v "$TD_SOURCE_DIR/td/telegram/td_log.h" "$INSTALL_DIR/include/td/telegram"
+    cp -v "$BUILD_DIR/td/telegram/tdjson_export.h" "$INSTALL_DIR/include/td/telegram"
 
     cd "$ROOT_DIR" || exit 1
     rm -rf "$BUILD_DIR"

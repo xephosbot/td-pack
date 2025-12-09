@@ -75,7 +75,7 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
 
   cmake -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
     -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_BUILD_TYPE=MinSizeRel \
     -GNinja -DANDROID_ABI=$ABI \
     -DANDROID_STL=$ANDROID_STL \
     -DANDROID_PLATFORM=android-21 \
@@ -83,12 +83,13 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
 
   if [ "$TDLIB_INTERFACE" == "Java" ] || [ "$TDLIB_INTERFACE" == "JSONJava" ] ; then
     echo "Building tdjni for $ABI..."
-    cmake --build . --target tdjni --parallel 8 || exit 1
+    cmake --build . --target tdjni -j$(sysctl -n hw.ncpu) || exit 1
     cp -p libtd*.so* "$INSTALL_DIR/" || exit 1
+    rm -f "$INSTALL_DIR"/*.so.debug 2>/dev/null
   fi
   if [ "$TDLIB_INTERFACE" == "JSON" ] ; then
     echo "Building tdjson for $ABI..."
-    cmake --build . --target tdjson --parallel 8 || exit 1
+    cmake --build . --target tdjson -j$(sysctl -n hw.ncpu) || exit 1
     cp -p td/libtdjson.so "$INSTALL_DIR/libtdjson.so.debug" || exit 1
     "$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/$HOST_ARCH/bin/llvm-strip" --strip-debug --strip-unneeded "$INSTALL_DIR/libtdjson.so.debug" -o "$INSTALL_DIR/libtdjson.so" || exit 1
     rm "$INSTALL_DIR/libtdjson.so.debug"
