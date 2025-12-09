@@ -89,8 +89,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get upgrade
-          sudo apt-get install -y cmake zlib1g-dev gperf ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y cmake zlib1g-dev zlib1g-dev-arm64-cross gperf ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Build OpenSSL
         run: |
