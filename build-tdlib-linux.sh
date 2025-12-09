@@ -89,7 +89,7 @@ for ARCH in x86_64 arm64; do
         || exit 1
 
     echo "Building TDLib for $ARCH..."
-    cmake --build . --target install -j4 || exit 1
+    cmake --build . --target install || exit 1
 
     cd "$ROOT_DIR" || exit 1
     rm -rf "$BUILD_DIR"
