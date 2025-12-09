@@ -98,7 +98,7 @@ for ARCH in x86_64 arm64; do
     #   Build + install
     # -------------------------
     echo "Building TDLib for $ARCH..."
-    cmake --build . --target install --parallel $(nproc) || exit 1
+    cmake --build . --target install || exit 1
 
     cd "$ROOT_DIR" || exit 1
     rm -rf "$BUILD_DIR"
