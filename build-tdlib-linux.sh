@@ -102,6 +102,19 @@ for ARCH in x86_64 arm64; do
     cp -v "$TD_SOURCE_DIR/td/telegram/td_log.h" "$INSTALL_DIR/include/td/telegram"
     cp -v "$BUILD_DIR/td/telegram/tdjson_export.h" "$INSTALL_DIR/include/td/telegram"
 
+    echo "Stripping static libraries..."
+    if [ "$ARCH" == "arm64" ]; then
+        STRIP_BIN=aarch64-linux-gnu-strip
+    else
+        STRIP_BIN=strip
+    fi
+
+    for f in "$INSTALL_DIR/lib"/*.a; do
+        [ -f "$f" ] || continue
+        echo "  stripping $(basename "$f")"
+        $STRIP_BIN --strip-unneeded "$f" 2>/dev/null || true
+    done
+
     cd "$ROOT_DIR" || exit 1
     rm -rf "$BUILD_DIR"
 done
