@@ -38,7 +38,7 @@ rm -rf tdlib/linux
 
 echo "Starting TDLib Linux builds..."
 
-for ARCH in arm64 x86_64; do
+for ARCH in x86_64 arm64; do
     echo "  Building TDLib for $ARCH"
 
     OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
