@@ -5,6 +5,7 @@ on:
 
 jobs:
   android:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -49,6 +50,7 @@ jobs:
           path: tdlib/android
 
   macos:
+    if: false
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -76,8 +78,32 @@ jobs:
           name: tdlib-macos
           path: tdlib/macos
 
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf cmake ninja-build
+
+      - name: Build OpenSSL (Linux)
+        run: |
+          chmod +x build-openssl-linux.sh
+          ./build-openssl-linux.sh openssl third-party/openssl
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-linux
+          path: tdlib/linux
+
   commit:
-    needs: [android, macos]
+    needs: [linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
