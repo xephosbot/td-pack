@@ -64,7 +64,7 @@ for ARCH in arm64 x86_64; do
         export AR=aarch64-linux-gnu-ar
         export RANLIB=aarch64-linux-gnu-ranlib
         export LD=aarch64-linux-gnu-ld
-        
+        export ZLIB_ROOT=/usr/local/arm64
         export ZLIB_LIBRARY=/usr/local/arm64/lib/libz.a
         export ZLIB_INCLUDE_DIR=/usr/local/arm64/include
 
