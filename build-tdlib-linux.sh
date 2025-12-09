@@ -92,7 +92,7 @@ for ARCH in x86_64 arm64; do
         || exit 1
 
     echo "Building TDLib for $ARCH..."
-    cmake --build . --target tdjson_static -j$(sysctl -n hw.ncpu) || exit 1
+    cmake --build . --target tdjson_static -j4 || exit 1
 
     cp -v "$BUILD_DIR"/*.a "$INSTALL_DIR/lib" 2>/dev/null || true
     cp -v "$BUILD_DIR"/*/*.a "$INSTALL_DIR/lib" 2>/dev/null || true
