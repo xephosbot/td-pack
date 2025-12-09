@@ -43,58 +43,6 @@ fi
 ANDROID_SDK_ROOT="$(cd "$(dirname -- "$ANDROID_SDK_ROOT")" >/dev/null; pwd -P)/$(basename -- "$ANDROID_SDK_ROOT")"
 ANDROID_NDK_ROOT="$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION"
 
-# Find CMake and Ninja in Android SDK
-CMAKE_BIN=""
-NINJA_BIN=""
-
-check_cmake_dir() {
-    local dir=$1
-    if [ -d "$dir" ]; then
-        if [ -x "$dir/cmake" ]; then
-            CMAKE_BIN="$dir/cmake"
-            PATH="$dir:$PATH"
-        fi
-        if [ -x "$dir/ninja" ]; then
-            NINJA_BIN="$dir/ninja"
-        fi
-        return 0
-    fi
-    return 1
-}
-
-for v in 3.22.1 3.18.1 3.10.2; do
-  check_cmake_dir "$ANDROID_SDK_ROOT/cmake/$v/bin" && break
-done
-
-if [ -z "$CMAKE_BIN" ]; then
-   LATEST_CMAKE_DIR=$(ls -d "$ANDROID_SDK_ROOT/cmake/"*/bin 2>/dev/null | tail -n 1)
-   check_cmake_dir "$LATEST_CMAKE_DIR"
-fi
-
-if [ -z "$CMAKE_BIN" ]; then
-    echo "Warning: CMake not found in Android SDK. Using system CMake."
-    CMAKE_BIN="cmake"
-fi
-
-if [ -z "$NINJA_BIN" ]; then
-    if command -v ninja &> /dev/null; then
-        NINJA_BIN=$(command -v ninja)
-    else
-        echo "Error: Ninja not found."
-        exit 1
-    fi
-fi
-
-# Determine HOST_ARCH for llvm-strip
-if [[ "$OSTYPE" == "linux"* ]] ; then
-  HOST_ARCH="linux-x86_64"
-elif [[ "$OSTYPE" == "darwin"* ]] ; then
-  HOST_ARCH="darwin-x86_64"
-else
-  echo "Error: Unsupported OS for this script."
-  exit 1
-fi
-
 TDLIB_INTERFACE_OPTION=$([ "$TDLIB_INTERFACE" == "JSON" ] && echo "-DTD_ANDROID_JSON=ON" || [ "$TDLIB_INTERFACE" == "JSONJava" ] && echo "-DTD_ANDROID_JSON_JAVA=ON" || echo "")
 
 # Clean output directory for Android
