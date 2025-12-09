@@ -39,10 +39,8 @@ echo "Starting TDLib Linux builds..."
 # -------------------------
 # BUILD FOR TWO ARCHS
 # -------------------------
-for ARCH in x86_64 arm64; do
-    echo "==============================="
+for ARCH in arm64 x86_64; do
     echo "  Building TDLib for $ARCH"
-    echo "==============================="
 
     OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
     if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
@@ -58,9 +56,6 @@ for ARCH in x86_64 arm64; do
 
     cd "$BUILD_DIR" || exit 1
 
-    # -------------------------
-    #   CROSS COMPILATION SETUP
-    # -------------------------
     if [ "$ARCH" == "arm64" ]; then
         echo "Enabling ARM64 cross-compilation..."
 
@@ -82,9 +77,6 @@ for ARCH in x86_64 arm64; do
         CMAKE_SYSTEM_FLAGS=""
     fi
 
-    # -------------------------
-    #   CMake configure
-    # -------------------------
     cmake "$TD_SOURCE_DIR" \
         -DCMAKE_BUILD_TYPE=Release \
         -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
@@ -94,11 +86,8 @@ for ARCH in x86_64 arm64; do
         $CMAKE_SYSTEM_FLAGS \
         || exit 1
 
-    # -------------------------
-    #   Build + install
-    # -------------------------
     echo "Building TDLib for $ARCH..."
-    cmake --build . --target install || exit 1
+    cmake --build . --target install --parallel 8 || exit 1
 
     cd "$ROOT_DIR" || exit 1
     rm -rf "$BUILD_DIR"
