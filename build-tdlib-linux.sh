@@ -23,6 +23,26 @@ if [ ! -d "$OPENSSL_INSTALL_DIR" ]; then
   exit 1
 fi
 
+OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
+if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
+    echo "Warning: OpenSSL for $ARCH not found in $OPENSSL_ARCH_DIR. Skipping..."
+    exit 1
+fi
+
+if [ "$ARCH" = "arm64" ]; then
+    echo "Generating TDLib auto files..."
+    
+    HOST_BUILD_DIR="build-tdlib-native"
+    rm -rf "$HOST_BUILD_DIR"
+    mkdir "$HOST_BUILD_DIR"
+    cd "$HOST_BUILD_DIR" || exit 1
+    
+    cmake "$TD_SOURCE_DIR" -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR"
+    cmake --build . --target prepare_cross_compiling -j$(sysctl -n hw.ncpu) || exit 1
+fi
+
+cd "$ROOT_DIR" || exit 1
+
 # Pick proper compiler per-arch
 if [ "$ARCH" = "arm64" ]; then
     echo "Using system ARM64 cross-compiler"
@@ -61,24 +81,6 @@ fi
 
 echo "Compiler: $CC"
 $CC --version | head -n1
-
-OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
-if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
-    echo "Warning: OpenSSL for $ARCH not found in $OPENSSL_ARCH_DIR. Skipping..."
-    exit 1
-fi
-
-echo "Generating TDLib auto files..."
-
-HOST_BUILD_DIR="build-tdlib-native"
-rm -rf "$HOST_BUILD_DIR"
-mkdir "$HOST_BUILD_DIR"
-cd "$HOST_BUILD_DIR" || exit 1
-
-cmake "$TD_SOURCE_DIR" -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR"
-cmake --build . --target prepare_cross_compiling -j$(sysctl -n hw.ncpu) || exit 1
-
-cd "$ROOT_DIR" || exit 1
 
 # Remove old artifacts
 rm -rf tdlib/linux
