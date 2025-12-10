@@ -26,6 +26,7 @@ export CXX=clang++-18
 export AR=llvm-ar-18
 export NM=llvm-nm-18
 export RANLIB=llvm-ranlib-18
+export STRIP=llvm-strip-18
 export OBJDUMP=llvm-objdump-18
 
 echo "Generating TDLib auto files..."
@@ -45,7 +46,7 @@ rm -rf tdlib/linux
 
 echo "Starting TDLib Linux builds..."
 
-for ARCH in arm64; do
+for ARCH in arm64 x86_64; do
     echo "  Building TDLib for $ARCH"
 
     OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
@@ -69,17 +70,22 @@ for ARCH in arm64; do
         export ZLIB_LIBRARY=/usr/local/arm64/lib/libz.a
         export ZLIB_INCLUDE_DIR=/usr/local/arm64/include
 
-        CMAKE_SYSTEM_FLAGS="
+        TARGET_TRIPLE="aarch64-linux-gnu"
+        CMAKE_EXTRA_FLAGS="
             -DCMAKE_SYSTEM_NAME=Linux
             -DCMAKE_SYSTEM_PROCESSOR=aarch64
-            -DCMAKE_C_COMPILER=clang-18
-            -DCMAKE_CXX_COMPILER=clang++-18
+            -DCMAKE_C_COMPILER_TARGET=$TARGET_TRIPLE
+            -DCMAKE_CXX_COMPILER_TARGET=$TARGET_TRIPLE
         "
+        STRIP_BIN="llvm-strip-18"
     else
         echo "Using native x86_64 toolchain"
         
         unset ZLIB_ROOT ZLIB_LIBRARY ZLIB_INCLUDE_DIR
-        CMAKE_SYSTEM_FLAGS=""
+        
+        TARGET_TRIPLE="x86_64-linux-gnu"
+        CMAKE_EXTRA_FLAGS=""
+        STRIP_BIN="strip"
     fi
 
     cmake $TD_SOURCE_DIR \
@@ -89,17 +95,17 @@ for ARCH in arm64; do
         -DTD_ENABLE_JNI=OFF \
         -DTD_ENABLE_LTO=ON \
         -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-        -DCMAKE_AR=/usr/bin/llvm-ar-18 \
-        -DCMAKE_NM=/usr/bin/llvm-nm-18 \
-        -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-18 \
-        -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-18 \
-        -DCMAKE_CXX_FLAGS="-stdlib=libc++ -O3" \
+        -DCMAKE_C_FLAGS="-O3 -flto -fPIC --target=$TARGET_TRIPLE" \
+        -DCMAKE_CXX_FLAGS="-O3 -flto -fPIC --target=$TARGET_TRIPLE -stdlib=libc++" \
         -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+        -DCMAKE_AR=llvm-ar-18 \
+        -DCMAKE_NM=llvm-nm-18 \
+        -DCMAKE_RANLIB=llvm-ranlib-18 \
         $CMAKE_SYSTEM_FLAGS \
         || exit 1
 
     echo "Building TDLib for $ARCH..."
-    cmake --build . --target tdjson_static j$(sysctl -n hw.ncpu) || exit 1
+    cmake --build . --target tdjson_static -j$(sysctl -n hw.ncpu) || exit 1
 
     cd "$ROOT_DIR" || exit 1
 
@@ -116,15 +122,8 @@ for ARCH in arm64; do
     cp -v "$TD_SOURCE_DIR"/td/telegram/td_log.h "$INSTALL_DIR/include"
 
     echo "Stripping static libraries..."
-    if [ "$ARCH" == "arm64" ]; then
-        STRIP_BIN=aarch64-linux-gnu-strip
-    else
-        STRIP_BIN=strip
-    fi
-
     for f in "$INSTALL_DIR/lib"/*.a; do
         [ -f "$f" ] || continue
-        echo "  stripping $(basename "$f")"
         $STRIP_BIN --strip-unneeded "$f" 2>/dev/null || true
     done
     
