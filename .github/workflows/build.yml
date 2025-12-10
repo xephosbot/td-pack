@@ -103,10 +103,14 @@ jobs:
           cat > Dockerfile.tmp << 'EOF'
           FROM dockcross/linux-arm64-lts
           RUN apt-get update && \
-              apt-get install -y clang-18 lld-18 libc++-18-dev libc++abi-18-dev && \
+              apt-get install -y wget gnupg software-properties-common && \
+              wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
+              add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" && \
+              apt-get update && \
+              apt-get install -y clang-18 lld-18 libc++-18-dev libc++abi-18-dev llvm-18 && \
               rm -rf /var/lib/apt/lists/*
-          ENV CC=clang-14
-          ENV CXX=clang++-14
+          ENV CC=clang-18
+          ENV CXX=clang++-18
           EOF
           
           docker build -t custom-dockcross-arm64 -f Dockerfile.tmp .
