@@ -100,10 +100,22 @@ jobs:
       - name: Prepare dockcross
         if: matrix.arch == 'arm64'
         run: |
-          docker run --rm dockcross/linux-arm64-lts > ./dockcross-arm64
+          cat > Dockerfile.tmp << 'EOF'
+          FROM dockcross/linux-arm64-lts
+          RUN apt-get update && \
+              apt-get install -y clang-18 lld-18 libc++-18-dev libc++abi-18-dev && \
+              rm -rf /var/lib/apt/lists/*
+          ENV CC=clang-14
+          ENV CXX=clang++-14
+          EOF
+          
+          docker build -t custom-dockcross-arm64 -f Dockerfile.tmp .
+          
+          docker run --rm custom-dockcross-arm64 > ./dockcross-arm64
           chmod +x ./dockcross-arm64
-          ./dockcross-arm64 bash -c "uname -m"
           echo "EXEC=./dockcross-arm64" >> $GITHUB_ENV
+          
+          rm Dockerfile.tmp
 
       - name: Build OpenSSL
         run: |
