@@ -28,6 +28,7 @@ export NM=llvm-nm-18
 export RANLIB=llvm-ranlib-18
 export STRIP=llvm-strip-18
 export OBJDUMP=llvm-objdump-18
+export CXXFLAGS="-stdlib=libc++"
 
 echo "Generating TDLib auto files..."
 
@@ -70,13 +71,11 @@ for ARCH in arm64 x86_64; do
         export ZLIB_LIBRARY=/usr/local/arm64/lib/libz.a
         export ZLIB_INCLUDE_DIR=/usr/local/arm64/include
 
-        TARGET_TRIPLE="aarch64-linux-gnu"
-        SYSROOT="/usr/aarch64-linux-gnu"
         CMAKE_EXTRA_FLAGS="
             -DCMAKE_SYSTEM_NAME=Linux
             -DCMAKE_SYSTEM_PROCESSOR=aarch64
-            -DCMAKE_C_COMPILER_TARGET=$TARGET_TRIPLE
-            -DCMAKE_CXX_COMPILER_TARGET=$TARGET_TRIPLE
+            -DCMAKE_C_COMPILER_TARGET=aarch64-linux-gnu
+            -DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu
         "
         STRIP_BIN="llvm-strip-18"
     else
@@ -85,21 +84,17 @@ for ARCH in arm64 x86_64; do
         unset ZLIB_ROOT ZLIB_LIBRARY ZLIB_INCLUDE_DIR
         
         TARGET_TRIPLE="x86_64-linux-gnu"
-        SYSROOT="/usr"
         CMAKE_EXTRA_FLAGS=""
         STRIP_BIN="strip"
     fi
 
     cmake $TD_SOURCE_DIR \
+        -GNinja \
         -DCMAKE_BUILD_TYPE=Release \
         -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
         -DTD_ENABLE_JNI=OFF \
-        -DTD_ENABLE_LTO=OFF \
-        -DCMAKE_SYSROOT="$SYSROOT" \
-        -DCMAKE_C_FLAGS="-O3 -fPIC -flto --target=$TARGET_TRIPLE --sysroot=$SYSROOT" \
-        -DCMAKE_CXX_FLAGS="-O3 -fPIC -flto --target=$TARGET_TRIPLE --sysroot=$SYSROOT -stdlib=libc++" \
-        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+        -DTD_ENABLE_LTO=ON \
         $CMAKE_EXTRA_FLAGS \
         || exit 1
 
