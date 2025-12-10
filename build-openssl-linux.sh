@@ -37,13 +37,19 @@ for ARCH in x86_64 arm64; do
     if [ "$ARCH" == "arm64" ]; then
         CONFIGURE_TARGET="linux-aarch64"
     
-        export CC=aarch64-linux-gnu-gcc
-        export CXX=aarch64-linux-gnu-g++
-        export AR=aarch64-linux-gnu-ar
-        export RANLIB=aarch64-linux-gnu-ranlib
-        export LD=aarch64-linux-gnu-ld
+        export CC="clang --target=aarch64-linux-gnu"
+        export CXX="clang++ --target=aarch64-linux-gnu"
+        export AR="llvm-ar"
+        export RANLIB="llvm-ranlib"
+        export LD="ld.lld"
     else
         CONFIGURE_TARGET="linux-x86_64"
+
+        export CC="clang"
+        export CXX="clang++"
+        export AR="llvm-ar"
+        export RANLIB="llvm-ranlib"
+        export LD="ld.lld"
     fi
 
     ./Configure "$CONFIGURE_TARGET" \
