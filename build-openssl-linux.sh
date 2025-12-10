@@ -53,8 +53,8 @@ fi
     --openssldir="$INSTALL_PATH" \
     no-shared no-tests -fPIC || exit 1
 
-make -j"$(nproc)" || exit 1
-make install_sw || exit 1
+make -j"$(nproc)" >/dev/null || exit 1
+make install_sw >/dev/null || exit 1
 
 make distclean >/dev/null || exit 1
 
