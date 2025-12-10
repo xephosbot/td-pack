@@ -65,9 +65,6 @@ else
     CMAKE_TOOLCHAIN_ARGS=()
 fi
 
-echo "Compiler: $CC"
-$CC --version | head -n1
-
 # Remove old artifacts
 rm -rf tdlib/linux
 
