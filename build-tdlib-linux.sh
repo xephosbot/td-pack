@@ -115,8 +115,22 @@ for ARCH in x86_64 arm64; do
         $STRIP_BIN --strip-unneeded "$f" 2>/dev/null || true
     done
 
+    echo ""
+    echo "===== Build directory tree for $ARCH ====="
+    
+    # If tree exists — use it
+    if command -v tree &> /dev/null; then
+        tree "$BUILD_DIR"
+    else
+        echo "(tree not installed — using fallback output)"
+        find "$BUILD_DIR" | sed -e "s|[^/]*/|- |g"
+    fi
+    
+    echo "=========================================="
+    echo ""
+
     cd "$ROOT_DIR" || exit 1
-    rm -rf "$BUILD_DIR"
+    #rm -rf "$BUILD_DIR"
 done
 
 echo "Done! TDLib Linux builds stored in tdlib/linux/"
