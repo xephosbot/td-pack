@@ -30,6 +30,8 @@ if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
 fi
 
 if [ "$ARCH" = "arm64" ]; then
+    unset CC CXX AR RANLIB LD ZLIB_ROOT ZLIB_LIBRARY ZLIB_INCLUDE_DIR
+
     echo "Generating TDLib auto files..."
     
     HOST_BUILD_DIR="build-tdlib-native"
