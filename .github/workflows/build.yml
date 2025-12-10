@@ -120,7 +120,7 @@ jobs:
           path: tdlib/linux
 
   commit:
-    needs: [android, macos, linux]
+    needs: [linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
