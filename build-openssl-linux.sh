@@ -49,6 +49,8 @@ else
     unset CC CXX AR RANLIB LD
 fi
 
+CFLAGS="-O3 -fPIC -ffunction-sections -fdata-sections" \
+LDFLAGS="-Wl,--gc-sections" \
 ./Configure "$CONFIGURE_TARGET" \
     --prefix="$INSTALL_PATH" \
     --openssldir="$INSTALL_PATH" \
