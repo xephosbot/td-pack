@@ -21,6 +21,13 @@ if [ ! -d "$OPENSSL_INSTALL_DIR" ]; then
   exit 1
 fi
 
+export CC=clang-18
+export CXX=clang++-18
+export AR=llvm-ar-18
+export NM=llvm-nm-18
+export RANLIB=llvm-ranlib-18
+export OBJDUMP=llvm-objdump-18
+
 echo "Generating TDLib auto files..."
 
 HOST_BUILD_DIR="build-tdlib-native"
@@ -58,13 +65,6 @@ for ARCH in arm64; do
     if [ "$ARCH" == "arm64" ]; then
         echo "Enabling ARM64 cross-compilation..."
 
-        export CC=clang-18
-        export CXX=clang++-18
-        export AR=llvm-ar-18
-        export NM=llvm-nm-18
-        export RANLIB=llvm-ranlib-18
-        export OBJDUMP=llvm-objdump-18
-
         export ZLIB_ROOT=/usr/local/arm64
         export ZLIB_LIBRARY=/usr/local/arm64/lib/libz.a
         export ZLIB_INCLUDE_DIR=/usr/local/arm64/include
@@ -77,13 +77,6 @@ for ARCH in arm64; do
         "
     else
         echo "Using native x86_64 toolchain"
-
-        export CC=clang-18
-        export CXX=clang++-18
-        export AR=llvm-ar-18
-        export NM=llvm-nm-18
-        export RANLIB=llvm-ranlib-18
-        export OBJDUMP=llvm-objdump-18
         
         unset ZLIB_ROOT ZLIB_LIBRARY ZLIB_INCLUDE_DIR
         CMAKE_SYSTEM_FLAGS=""
@@ -106,7 +99,7 @@ for ARCH in arm64; do
         || exit 1
 
     echo "Building TDLib for $ARCH..."
-    cmake --build . --target tdjson_static -j4 || exit 1
+    cmake --build . --target tdjson_static j$(sysctl -n hw.ncpu) || exit 1
 
     cd "$ROOT_DIR" || exit 1
 
