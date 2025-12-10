@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 OPENSSL_SOURCE_DIR=${1:-openssl}
 OPENSSL_INSTALL_DIR=${2:-third-party/openssl}
@@ -35,11 +36,13 @@ CONFIGURE_TARGET=""
 if [ "$ARCH" == "arm64" ]; then
     CONFIGURE_TARGET="linux-aarch64"
 
-    export CC=aarch64-linux-gnu-gcc
-    export CXX=aarch64-linux-gnu-g++
-    export AR=aarch64-linux-gnu-ar
-    export RANLIB=aarch64-linux-gnu-ranlib
-    export LD=aarch64-linux-gnu-ld
+    if [ -z "$CROSS_TRIPLE" ]; then
+        export CC=aarch64-linux-gnu-gcc
+        export CXX=aarch64-linux-gnu-g++
+        export AR=aarch64-linux-gnu-ar
+        export RANLIB=aarch64-linux-gnu-ranlib
+        export LD=aarch64-linux-gnu-ld
+    fi
 else
     CONFIGURE_TARGET="linux-x86_64"
 fi
@@ -47,10 +50,10 @@ fi
 ./Configure "$CONFIGURE_TARGET" \
     --prefix="$INSTALL_PATH" \
     --openssldir="$INSTALL_PATH" \
-    no-shared no-tests -fPIC >/dev/null || exit 1
+    no-shared no-tests -fPIC || exit 1
 
-make -j"$(nproc)" >/dev/null || exit 1
-make install_sw >/dev/null || exit 1
+make -j"$(nproc)" || exit 1
+make install_sw || exit 1
 
 make distclean >/dev/null || exit 1
 
