@@ -130,7 +130,7 @@ jobs:
           path: tdlib/linux/${{ matrix.arch }}
 
   commit:
-    needs: [linux]
+    needs: [macos, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
