@@ -51,7 +51,7 @@ for ARCH in x86_64 arm64; do
         CXX="$CXX_CMD" \
         AR="llvm-ar-18" \
         RANLIB="llvm-ranlib-18" \
-        no-shared no-tests no-apps -fPIC >/dev/null || exit 1
+        no-shared no-tests -fPIC >/dev/null || exit 1
 
     make -j"$(nproc)" >/dev/null || exit 1
     make install_sw >/dev/null || exit 1
