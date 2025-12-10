@@ -36,13 +36,14 @@ CONFIGURE_TARGET=""
 if [ "$ARCH" == "arm64" ]; then
     CONFIGURE_TARGET="linux-aarch64"
 
-    if [ -z "$CROSS_TRIPLE" ]; then
-        export CC=aarch64-linux-gnu-gcc
-        export CXX=aarch64-linux-gnu-g++
-        export AR=aarch64-linux-gnu-ar
-        export RANLIB=aarch64-linux-gnu-ranlib
-        export LD=aarch64-linux-gnu-ld
-    fi
+    unset CROSS_COMPILE
+    
+    export CC=/usr/xcc/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-gcc
+    export CXX=/usr/xcc/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-g++
+    export AR=/usr/xcc/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-ar
+    export RANLIB=/usr/xcc/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-ranlib
+    
+    echo "Using cross-compiler: $CC"
 else
     CONFIGURE_TARGET="linux-x86_64"
 fi
