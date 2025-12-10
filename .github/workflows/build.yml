@@ -95,13 +95,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake clang-18 libc++-18-dev libc++abi-18-dev llvm-18 lld-18 zlib1g-dev gperf ninja-build
+          echo "EXEC=" >> $GITHUB_ENV
 
       - name: Prepare dockcross
         if: matrix.arch == 'arm64'
         run: |
           docker run --rm dockcross/linux-arm64-lts > ./dockcross-arm64
           chmod +x ./dockcross-arm64
-          echo "EXEC=./dockcross-arm64 bash -c" >> $GITHUB_ENV
+          ./dockcross-arm64 bash -c "uname -m"
+          echo "EXEC=./dockcross-arm64" >> $GITHUB_ENV
 
       - name: Build OpenSSL
         run: |
