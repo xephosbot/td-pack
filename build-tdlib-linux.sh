@@ -87,11 +87,19 @@ mkdir -p "$BUILD_DIR"
 
 cd "$BUILD_DIR" || exit 1
 
+C_FLAGS="-O3 -fPIC -ffunction-sections -fdata-sections"
+CXX_FLAGS="-O3 -fPIC -ffunction-sections -fdata-sections -stdlib=libc++"
+LD_FLAGS="-Wl,--gc-sections"
+
 cmake $TD_SOURCE_DIR \
   -DCMAKE_BUILD_TYPE=Release \
   -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
   -DTD_ENABLE_JNI=OFF \
   -DTD_ENABLE_LTO=OFF \
+  -DCMAKE_C_FLAGS="$C_FLAGS" \
+  -DCMAKE_CXX_FLAGS="$CXX_FLAGS" \
+  -DCMAKE_EXE_LINKER_FLAGS="$LD_FLAGS" \
+  -DCMAKE_STATIC_LINKER_FLAGS="--gc-sections" \
   "${CMAKE_TOOLCHAIN_ARGS[@]}" \
   || exit 1
 
