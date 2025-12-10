@@ -53,7 +53,6 @@ for ARCH in x86_64 arm64; do
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR"
     mkdir -p "$INSTALL_DIR/lib"
-    mkdir -p "$INSTALL_DIR/include/td/telegram"
 
     cd "$BUILD_DIR" || exit 1
 
@@ -82,7 +81,7 @@ for ARCH in x86_64 arm64; do
         CMAKE_SYSTEM_FLAGS=""
     fi
 
-    cmake -S "$TD_SOURCE_DIR" -B "$BUILD_DIR" \
+    cmake $TD_SOURCE_DIR \
         -DCMAKE_BUILD_TYPE=Release \
         -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
@@ -94,13 +93,15 @@ for ARCH in x86_64 arm64; do
     echo "Building TDLib for $ARCH..."
     cmake --build . --target tdjson_static -j4 || exit 1
 
+    mkdir -p "$INSTALL_DIR/include/td/telegram"
+
     cp -v "$BUILD_DIR"/*.a "$INSTALL_DIR/lib" 2>/dev/null || true
     cp -v "$BUILD_DIR"/*/*.a "$INSTALL_DIR/lib" 2>/dev/null || true
-    cp -v "$OPENSSL_ARCH_DIR/lib/libcrypto.a" "$INSTALL_DIR/lib" || exit 1
-    cp -v "$OPENSSL_ARCH_DIR/lib/libssl.a" "$INSTALL_DIR/lib" || exit 1
-    cp -v "$TD_SOURCE_DIR/td/telegram/td_json_client.h" "$INSTALL_DIR/include/td/telegram"
-    cp -v "$TD_SOURCE_DIR/td/telegram/td_log.h" "$INSTALL_DIR/include/td/telegram"
-    cp -v "$BUILD_DIR/td/telegram/tdjson_export.h" "$INSTALL_DIR/include/td/telegram"
+    cp -v "$OPENSSL_ARCH_DIR"/lib/libcrypto.a "$INSTALL_DIR/lib" || exit 1
+    cp -v "$OPENSSL_ARCH_DIR"/lib/libssl.a "$INSTALL_DIR/lib" || exit 1
+    cp -v "$TD_SOURCE_DIR"/td/telegram/td_json_client.h "$INSTALL_DIR/include/td/telegram"
+    cp -v "$TD_SOURCE_DIR"/td/telegram/td_log.h "$INSTALL_DIR/include/td/telegram"
+    cp -v "$BUILD_DIR"/td/telegram/tdjson_export.h "$INSTALL_DIR/include/td/telegram"
 
     echo "Stripping static libraries..."
     if [ "$ARCH" == "arm64" ]; then
@@ -115,7 +116,9 @@ for ARCH in x86_64 arm64; do
         $STRIP_BIN --strip-unneeded "$f" 2>/dev/null || true
     done
 
-    echo ""
+    cd "$ROOT_DIR" || exit 1
+
+    echo "\n"
     echo "===== Build directory tree for $ARCH ====="
     
     # If tree exists — use it
@@ -127,9 +130,8 @@ for ARCH in x86_64 arm64; do
     fi
     
     echo "=========================================="
-    echo ""
-
-    cd "$ROOT_DIR" || exit 1
+    echo "\n"
+    
     #rm -rf "$BUILD_DIR"
 done
 
