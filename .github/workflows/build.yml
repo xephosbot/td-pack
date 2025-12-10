@@ -50,8 +50,11 @@ jobs:
           path: tdlib/android
 
   macos:
-    if: False
     runs-on: macos-latest
+    strategy:
+        matrix:
+          arch: [arm64, x86_64]
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,18 +68,18 @@ jobs:
       - name: Build OpenSSL
         run: |
           chmod +x build-openssl-macos.sh
-          ./build-openssl-macos.sh openssl third-party/openssl
+          ./build-openssl-macos.sh openssl third-party/openssl ${{ matrix.arch }}
 
       - name: Build TDLib
         run: |
           chmod +x build-tdlib-macos.sh
-          ./build-tdlib-macos.sh td third-party/openssl
+          ./build-tdlib-macos.sh td third-party/openssl ${{ matrix.arch }}
 
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tdlib-macos
-          path: tdlib/macos
+          name: tdlib-macos-${{ matrix.arch }}
+          path: tdlib/macos/${{ matrix.arch }}
 
   linux:
     runs-on: ubuntu-latest
