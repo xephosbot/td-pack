@@ -31,26 +31,23 @@ mkdir -p "$INSTALL_PATH"
 
 make distclean >/dev/null 2>&1 || true
 
+CONFIGURE_TARGET=""
 if [ "$ARCH" == "arm64" ]; then
-    TARGET="linux-aarch64-cross"
-    CC="aarch64-unknown-linux-gnu-gcc"
-    AR="aarch64-unknown-linux-gnu-ar"
-    RANLIB="aarch64-unknown-linux-gnu-ranlib"
+    CONFIGURE_TARGET="linux-aarch64"
+
+    export CC=aarch64-linux-gnu-gcc
+    export CXX=aarch64-linux-gnu-g++
+    export AR=aarch64-linux-gnu-ar
+    export RANLIB=aarch64-linux-gnu-ranlib
+    export LD=aarch64-linux-gnu-ld
 else
-    TARGET="linux-x86_64"
-    CC="gcc"
-    AR="ar"
-    RANLIB="ranlib"
+    CONFIGURE_TARGET="linux-x86_64"
 fi
 
-./Configure "$TARGET" \
+./Configure "$CONFIGURE_TARGET" \
     --prefix="$INSTALL_PATH" \
     --openssldir="$INSTALL_PATH" \
-    no-shared no-tests -fPIC \
-    CC="$CC" \
-    AR="$AR" \
-    RANLIB="$RANLIB" \
-    >/dev/null || exit 1
+    no-shared no-tests -fPIC >/dev/null || exit 1
 
 make -j"$(nproc)" >/dev/null || exit 1
 make install_sw >/dev/null || exit 1
