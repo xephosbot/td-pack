@@ -33,17 +33,15 @@ fi
 
 # Pick proper compiler per-arch
 if [ "$ARCH" = "arm64" ]; then
-    # В dockcross с clang-18
     if [ -n "$CROSS_ROOT" ]; then
-        echo "Detected dockcross environment for ARM64 with Clang 18"
+        echo "Detected dockcross environment for ARM64 with Clang 14"
         
-        export CC=clang-18
-        export CXX=clang++-18
-        export AR=llvm-ar-18
-        export RANLIB=llvm-ranlib-18
-        export STRIP=llvm-strip-18
+        export CC=clang-14
+        export CXX=clang++-14
+        export AR=llvm-ar-14
+        export RANLIB=llvm-ranlib-14
+        export STRIP=llvm-strip-14
         
-        # Для кросс-компиляции с Clang нужно указать target и sysroot
         export CFLAGS="--target=aarch64-unknown-linux-gnu --sysroot=$CROSS_ROOT"
         export CXXFLAGS="--target=aarch64-unknown-linux-gnu --sysroot=$CROSS_ROOT"
         
@@ -61,7 +59,6 @@ if [ "$ARCH" = "arm64" ]; then
         BUILD_CXXFLAGS="-O3 -fPIC -stdlib=libc++ $CXXFLAGS"
         LDFLAGS="-fuse-ld=lld-18"
     else
-        # Системный кросс-компилятор (если есть)
         echo "Using system ARM64 cross-compiler"
         export CC=aarch64-linux-gnu-gcc
         export CXX=aarch64-linux-gnu-g++
@@ -81,7 +78,6 @@ if [ "$ARCH" = "arm64" ]; then
         LDFLAGS=""
     fi
 else
-    # host x86_64 clang
     echo "Using native x86_64 Clang 18"
     export CC=clang-18
     export CXX=clang++-18
