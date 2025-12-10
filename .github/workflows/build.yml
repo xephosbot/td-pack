@@ -89,7 +89,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake clang-18 libc++-18-dev libc++abi-18-dev llvm-18 lld-18 zlib1g-dev gperf ninja-build binutils-aarch64-linux-gnu
+          sudo apt-get install -y cmake clang-18 libc++-18-dev libc++abi-18-dev llvm-18 lld-18 zlib1g-dev gperf ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Build zlib for ARM64
         run: |
