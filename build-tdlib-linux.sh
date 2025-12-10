@@ -23,12 +23,6 @@ if [ ! -d "$OPENSSL_INSTALL_DIR" ]; then
   exit 1
 fi
 
-OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
-if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
-    echo "Warning: OpenSSL for $ARCH not found in $OPENSSL_ARCH_DIR. Skipping..."
-    exit 1
-fi
-
 if [ "$ARCH" = "arm64" ]; then
     echo "Generating TDLib auto files..."
     
@@ -38,7 +32,7 @@ if [ "$ARCH" = "arm64" ]; then
     cd "$HOST_BUILD_DIR" || exit 1
     
     cmake "$TD_SOURCE_DIR"
-    cmake --build . --target prepare_cross_compiling -j$(sysctl -n hw.ncpu) || exit 1
+    cmake --build . --target prepare_cross_compiling -j"$(nproc)" || exit 1
 
     cd "$ROOT_DIR" || exit 1
 fi
@@ -63,20 +57,12 @@ if [ "$ARCH" = "arm64" ]; then
         -DCMAKE_C_COMPILER="$CC"
         -DCMAKE_CXX_COMPILER="$CXX"
     )
-    
-    BUILD_CFLAGS="-O3 -fPIC"
-    BUILD_CXXFLAGS="-O3 -fPIC"
-    LDFLAGS=""
 else
     echo "Using native x86_64 toolchain"
     unset CC CXX AR RANLIB LD ZLIB_ROOT ZLIB_LIBRARY ZLIB_INCLUDE_DIR
     export STRIP=strip
     
     CMAKE_TOOLCHAIN_ARGS=()
-    
-    BUILD_CFLAGS="-O3 -flto -fPIC"
-    BUILD_CXXFLAGS="-O3 -flto -fPIC"
-    LDFLAGS="-fuse-ld=lld-18"
 fi
 
 echo "Compiler: $CC"
@@ -86,6 +72,12 @@ $CC --version | head -n1
 rm -rf tdlib/linux
 
 echo "Starting TDLib Linux build for $ARCH..."
+
+OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
+if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
+    echo "Warning: OpenSSL for $ARCH not found in $OPENSSL_ARCH_DIR. Skipping..."
+    exit 1
+fi
 
 BUILD_DIR="build-tdlib-linux-$ARCH"
 INSTALL_DIR="$ROOT_DIR/tdlib/linux/$ARCH"
@@ -100,11 +92,11 @@ cmake $TD_SOURCE_DIR \
   -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
   -DTD_ENABLE_JNI=OFF \
   -DTD_ENABLE_LTO=OFF \
-  $CMAKE_SYSTEM_FLAGS \
+  "${CMAKE_TOOLCHAIN_ARGS[@]}" \
   || exit 1
 
 echo "Building TDLib for $ARCH..."
-cmake --build . --target tdjson_static -j$(sysctl -n hw.ncpu) || exit 1
+cmake --build . --target tdjson_static -j"$(nproc)" || exit 1
 
 cd "$ROOT_DIR" || exit 1
 
