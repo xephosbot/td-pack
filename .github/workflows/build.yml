@@ -80,6 +80,10 @@ jobs:
 
   linux:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+        
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,38 +93,30 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake clang-18 libc++-18-dev libc++abi-18-dev llvm-18 lld-18 zlib1g-dev gperf ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y cmake clang-18 libc++-18-dev libc++abi-18-dev llvm-18 lld-18 zlib1g-dev gperf ninja-build
 
-      - name: Build zlib for ARM64
+      - name: Prepare dockcross (ARM64 only)
+        if: matrix.arch == 'arm64'
         run: |
-          curl -LO https://zlib.net/zlib-1.3.1.tar.gz
-          tar xf zlib-1.3.1.tar.gz
-          cd zlib-1.3.1
-      
-          CC=clang-18 \
-          AR=llvm-ar-18 \
-          RANLIB=llvm-ranlib-18 \
-          CFLAGS="-Os" \
-          ./configure --static --prefix=/usr/local/arm64
-      
-          make -j$(nproc)
-          sudo make install
+          docker run --rm dockcross/linux-arm64-lts > ./dockcross-arm64
+          chmod +x ./dockcross-arm64
+          echo "EXEC=./dockcross-arm64 bash -c" >> $GITHUB_ENV
 
       - name: Build OpenSSL
         run: |
           chmod +x build-openssl-linux.sh
-          ./build-openssl-linux.sh openssl third-party/openssl
+          $EXEC "./build-openssl-linux.sh openssl third-party/openssl ${{ matrix.arch }}"
 
       - name: Build TDLib
         run: |
           chmod +x build-tdlib-linux.sh
-          ./build-tdlib-linux.sh td third-party/openssl
+          $EXEC "./build-tdlib-linux.sh td third-party/openssl ${{ matrix.arch }}"
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tdlib-linux
-          path: tdlib/linux
+          name: tdlib-linux-${{ matrix.arch }}
+          path: tdlib/linux/${{ matrix.arch }}
 
   commit:
     needs: [linux]
