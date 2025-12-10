@@ -88,7 +88,7 @@ else
     CMAKE_TOOLCHAIN_ARGS=()
     
     BUILD_CFLAGS="-O3 -flto -fPIC"
-    BUILD_CXXFLAGS="-O3 -flto -fPIC -stdlib=libc++"
+    BUILD_CXXFLAGS="-O3 -flto -fPIC"
     LDFLAGS="-fuse-ld=lld-18"
 fi
 
@@ -98,22 +98,8 @@ $CC --version | head -n1
 OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
 if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
     echo "Warning: OpenSSL for $ARCH not found in $OPENSSL_ARCH_DIR. Skipping..."
-    continue
+    exit 1
 fi
-
-echo "Generating TDLib auto files..."
-HOST_BUILD_DIR="build-tdlib-native"
-rm -rf "$HOST_BUILD_DIR"
-mkdir "$HOST_BUILD_DIR"
-cd "$HOST_BUILD_DIR" || exit 1
-
-cmake "$TD_SOURCE_DIR" \
-    -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
-    "${CMAKE_TOOLCHAIN_ARGS[@]}" \
-    || exit 1
-cmake --build . --target prepare_cross_compiling -j"$NPROC" || exit 1
-
-cd "$ROOT_DIR" || exit 1
 
 # Remove old artifacts
 rm -rf tdlib/linux
