@@ -85,7 +85,7 @@ mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR" || exit 1
 
 C_FLAGS="-O3 -fPIC -ffunction-sections -fdata-sections"
-CXX_FLAGS="-O3 -fPIC -ffunction-sections -fdata-sections -stdlib=libc++"
+CXX_FLAGS="-O3 -fPIC -ffunction-sections -fdata-sections"
 LD_FLAGS="-Wl,--gc-sections"
 
 cmake $TD_SOURCE_DIR \
