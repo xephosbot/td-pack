@@ -82,7 +82,7 @@ for ARCH in x86_64 arm64; do
         CMAKE_SYSTEM_FLAGS=""
     fi
 
-    cmake "$TD_SOURCE_DIR" \
+    cmake -S "$TD_SOURCE_DIR" -B "$BUILD_DIR" \
         -DCMAKE_BUILD_TYPE=Release \
         -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
