@@ -36,25 +36,19 @@ for ARCH in x86_64 arm64; do
     CONFIGURE_TARGET=""
     if [ "$ARCH" == "arm64" ]; then
         CONFIGURE_TARGET="linux-aarch64"
-    
-        export CC="clang --target=aarch64-linux-gnu"
-        export CXX="clang++ --target=aarch64-linux-gnu"
-        export AR="llvm-ar"
-        export RANLIB="llvm-ranlib"
-        export LD="ld.lld"
+        TARGET="aarch64-linux-gnu"
     else
         CONFIGURE_TARGET="linux-x86_64"
-
-        export CC="clang"
-        export CXX="clang++"
-        export AR="llvm-ar"
-        export RANLIB="llvm-ranlib"
-        export LD="ld.lld"
+        TARGET="x86_64-linux-gnu"
     fi
 
     ./Configure "$CONFIGURE_TARGET" \
         --prefix="$INSTALL_PATH" \
         --openssldir="$INSTALL_PATH" \
+        CC="clang-18 --target=$TARGET" \
+        CXX="clang++-18 --target=$TARGET" \
+        AR=llvm-ar-18 \
+        RANLIB=llvm-ranlib-18 \
         no-shared -fPIC >/dev/null || exit 1
 
     make -j"$(nproc)" >/dev/null || exit 1
