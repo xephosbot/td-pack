@@ -38,7 +38,7 @@ rm -rf tdlib/linux
 
 echo "Starting TDLib Linux builds..."
 
-for ARCH in x86_64 arm64; do
+for ARCH in arm64; do
     echo "  Building TDLib for $ARCH"
 
     OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
@@ -58,11 +58,12 @@ for ARCH in x86_64 arm64; do
     if [ "$ARCH" == "arm64" ]; then
         echo "Enabling ARM64 cross-compilation..."
 
-        export CC=aarch64-linux-gnu-gcc
-        export CXX=aarch64-linux-gnu-g++
-        export AR=aarch64-linux-gnu-ar
-        export RANLIB=aarch64-linux-gnu-ranlib
-        export LD=aarch64-linux-gnu-ld
+        export CC=clang-18
+        export CXX=clang++-18
+        export AR=llvm-ar-18
+        export NM=llvm-nm-18
+        export RANLIB=llvm-ranlib-18
+        export OBJDUMP=llvm-objdump-18
 
         export ZLIB_ROOT=/usr/local/arm64
         export ZLIB_LIBRARY=/usr/local/arm64/lib/libz.a
@@ -71,12 +72,20 @@ for ARCH in x86_64 arm64; do
         CMAKE_SYSTEM_FLAGS="
             -DCMAKE_SYSTEM_NAME=Linux
             -DCMAKE_SYSTEM_PROCESSOR=aarch64
-            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
-            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+            -DCMAKE_C_COMPILER=clang-18
+            -DCMAKE_CXX_COMPILER=clang++-18
         "
     else
         echo "Using native x86_64 toolchain"
-        unset CC CXX AR RANLIB LD
+
+        export CC=clang-18
+        export CXX=clang++-18
+        export AR=llvm-ar-18
+        export NM=llvm-nm-18
+        export RANLIB=llvm-ranlib-18
+        export OBJDUMP=llvm-objdump-18
+        
+        unset ZLIB_ROOT ZLIB_LIBRARY ZLIB_INCLUDE_DIR
         CMAKE_SYSTEM_FLAGS=""
     fi
 
@@ -85,7 +94,14 @@ for ARCH in x86_64 arm64; do
         -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
         -DTD_ENABLE_JNI=OFF \
-        -DTD_ENABLE_LTO=OFF \
+        -DTD_ENABLE_LTO=ON \
+        -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+        -DCMAKE_AR=/usr/bin/llvm-ar-18 \
+        -DCMAKE_NM=/usr/bin/llvm-nm-18 \
+        -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-18 \
+        -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-18 \
+        -DCMAKE_CXX_FLAGS="-stdlib=libc++ -O3" \
+        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
         $CMAKE_SYSTEM_FLAGS \
         || exit 1
 
@@ -118,22 +134,8 @@ for ARCH in x86_64 arm64; do
         echo "  stripping $(basename "$f")"
         $STRIP_BIN --strip-unneeded "$f" 2>/dev/null || true
     done
-
-    echo "\n"
-    echo "===== Build directory tree for $ARCH ====="
     
-    # If tree exists — use it
-    if command -v tree &> /dev/null; then
-        tree "$BUILD_DIR"
-    else
-        echo "(tree not installed — using fallback output)"
-        find "$BUILD_DIR" | sed -e "s|[^/]*/|- |g"
-    fi
-    
-    echo "=========================================="
-    echo "\n"
-    
-    #rm -rf "$BUILD_DIR"
+    rm -rf "$BUILD_DIR"
 done
 
 echo "Done! TDLib Linux builds stored in tdlib/linux/"
