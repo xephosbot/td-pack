@@ -34,21 +34,23 @@ for ARCH in x86_64 arm64; do
     make distclean >/dev/null 2>&1 || true
 
     CONFIGURE_TARGET=""
-    if [ "$ARCH" == "arm64" ]; then
+   if [ "$ARCH" == "arm64" ]; then
+        CC_CMD="clang-18 --target=aarch64-linux-gnu --sysroot=/usr/aarch64-linux-gnu"
+        CXX_CMD="clang++-18 --target=aarch64-linux-gnu --sysroot=/usr/aarch64-linux-gnu"
         CONFIGURE_TARGET="linux-aarch64"
-        TARGET="aarch64-linux-gnu"
     else
+        CC_CMD="clang-18"
+        CXX_CMD="clang++-18"
         CONFIGURE_TARGET="linux-x86_64"
-        TARGET="x86_64-linux-gnu"
     fi
 
     ./Configure "$CONFIGURE_TARGET" \
         --prefix="$INSTALL_PATH" \
         --openssldir="$INSTALL_PATH" \
-        CC="clang-18 --target=$TARGET" \
-        CXX="clang++-18 --target=$TARGET" \
-        AR=llvm-ar-18 \
-        RANLIB=llvm-ranlib-18 \
+        CC="$CC_CMD" \
+        CXX="$CXX_CMD" \
+        AR="llvm-ar-18" \
+        RANLIB="llvm-ranlib-18" \
         no-shared -fPIC >/dev/null || exit 1
 
     make -j"$(nproc)" >/dev/null || exit 1
