@@ -46,7 +46,7 @@ rm -rf "$HOST_BUILD_DIR"
 mkdir "$HOST_BUILD_DIR"
 cd "$HOST_BUILD_DIR" || exit 1
 
-cmake "$TD_SOURCE_DIR"
+cmake "$TD_SOURCE_DIR" -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR"
 cmake --build . --target prepare_cross_compiling -j$(sysctl -n hw.ncpu) || exit 1
 
 cd "$ROOT_DIR" || exit 1
