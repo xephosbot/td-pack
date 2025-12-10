@@ -5,6 +5,7 @@ on:
 
 jobs:
   android:
+    if: False
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -49,6 +50,7 @@ jobs:
           path: tdlib/android
 
   macos:
+    if: False
     runs-on: macos-latest
     steps:
       - name: Checkout
