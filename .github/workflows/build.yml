@@ -106,12 +106,12 @@ jobs:
       - name: Build OpenSSL
         run: |
           chmod +x build-openssl-linux.sh
-          $EXEC "./build-openssl-linux.sh openssl third-party/openssl"
+          $EXEC ./build-openssl-linux.sh openssl third-party/openssl ${{ matrix.arch }}
 
       - name: Build TDLib
         run: |
           chmod +x build-tdlib-linux.sh
-          $EXEC "./build-tdlib-linux.sh td third-party/openssl"
+          $EXEC ./build-tdlib-linux.sh td third-party/openssl ${{ matrix.arch }}
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
