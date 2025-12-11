@@ -24,7 +24,7 @@
       "binaryDir": "build/linux-aarch64",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/linux/aarch64",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/linux/arm64",
         "TD_INSTALL_SHARED_LIBRARIES": "ON",
         "TD_INSTALL_STATIC_LIBRARIES": "ON",
         "TD_ENABLE_JNI": "OFF",
