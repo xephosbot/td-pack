@@ -8,9 +8,4 @@ build_type=Release
 
 [conf]
 # tell conan how to call cross compilers (this helps some tools)
-tools.build:compiler_executables={
-    "c":"clang",
-    "cpp":"clang++",
-    "ar":"llvm-ar",
-    "ranlib":"llvm-ranlib"
-}
+tools.build:compiler_executables={"c":"clang","cpp":"clang++","ar":"llvm-ar","ranlib":"llvm-ranlib"}
