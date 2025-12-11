@@ -4,9 +4,3 @@ arch=x86_64
 compiler=gcc
 compiler.libcxx=libstdc++11
 build_type=Release
-
-[options]
-
-[build_requires]
-
-[env]
