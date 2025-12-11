@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # Usage:
-# ./build-linux.sh linux x86_64
-# ./build-linux.sh linux aarch64
-# ./build-linux.sh macos arm64
-# ./build-linux.sh macos x86_64
+# ./build.sh linux x86_64
+# ./build.sh linux aarch64
+# ./build.sh macos arm64
+# ./build.sh macos x86_64
 
 OS=${1:-linux}
 ARCH=${2:-x86_64}
