@@ -1,11 +1,16 @@
 [settings]
 os=Linux
 arch=armv8
-compiler=gcc
-compiler.version=13
+compiler=clang
+compiler.version=17
 compiler.libcxx=libstdc++11
 build_type=Release
 
 [conf]
 # tell conan how to call cross compilers (this helps some tools)
-tools.build:compiler_executables={"c":"aarch64-linux-gnu-gcc","cpp":"aarch64-linux-gnu-g++","ar":"aarch64-linux-gnu-ar","ranlib":"aarch64-linux-gnu-ranlib"}
+tools.build:compiler_executables={
+    "c":"clang",
+    "cpp":"clang++",
+    "ar":"llvm-ar",
+    "ranlib":"llvm-ranlib"
+}
