@@ -9,8 +9,3 @@ build_type=Release
 [conf]
 # tell conan how to call cross compilers (this helps some tools)
 tools.build:compiler_executables={"c":"aarch64-linux-gnu-gcc","cpp":"aarch64-linux-gnu-g++","ar":"aarch64-linux-gnu-ar","ranlib":"aarch64-linux-gnu-ranlib"}
-
-[env]
-# If you have a custom location for sysroot or zlib for cross, set it here
-# SYSROOT=/usr/local/arm64
-# ZLIB_ROOT=/usr/local/arm64
