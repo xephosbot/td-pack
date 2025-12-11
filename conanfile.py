@@ -17,7 +17,7 @@ class TdlibConan(ConanFile):
 	default_options = {"shared": False}
 
 	def layout(self):
-		pass
+    	cmake_layout(self, build_folder="build/conan")
 
 	def generate(self):
 		tc = CMakeToolchain(self)
