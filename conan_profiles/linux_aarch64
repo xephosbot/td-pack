@@ -7,17 +7,7 @@ compiler.libcxx=libstdc++11
 build_type=Release
 
 [conf]
-# tell conan how to call cross compilers (this helps some tools)
 tools.build:compiler_executables={"c":"clang","cpp":"clang++","ar":"llvm-ar","ranlib":"llvm-ranlib"}
-tools.build:cflags=[
-    "--target=aarch64-linux-gnu",
-    "--sysroot=/usr/aarch64-linux-gnu"
-]
-tools.build:cxxflags=[
-    "--target=aarch64-linux-gnu",
-    "--sysroot=/usr/aarch64-linux-gnu"
-]
-tools.build:ldflags=[
-    "--target=aarch64-linux-gnu",
-    "--sysroot=/usr/aarch64-linux-gnu"
-]
+tools.build:cflags=--target=aarch64-linux-gnu --sysroot=/usr/aarch64-linux-gnu
+tools.build:cxxflags=--target=aarch64-linux-gnu --sysroot=/usr/aarch64-linux-gnu
+tools.build:ldflags=--target=aarch64-linux-gnu --sysroot=/usr/aarch64-linux-gnu
