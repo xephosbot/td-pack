@@ -8,5 +8,11 @@ build_type=Release
 
 [conf]
 tools.build:compiler_executables={"c":"clang","cpp":"clang++","ar":"llvm-ar","ranlib":"llvm-ranlib"}
-tools.build:cflags=['--target=aarch64-linux-gnu', '--sysroot=/usr/aarch64-linux-gnu']
-tools.build:cxxflags=['--target=aarch64-linux-gnu', '--sysroot=/usr/aarch64-linux-gnu']
+tools.build:sysroot=/usr/aarch64-linux-gnu
+tools.build:cflags=['--target=aarch64-linux-gnu']
+tools.build:cxxflags=['--target=aarch64-linux-gnu']
+tools.build:exelinkflags=['--target=aarch64-linux-gnu']
+tools.build:sharedlinkflags=['--target=aarch64-linux-gnu']
+tools.build:verbosity=verbose
+tools.compilation:verbosity=verbose
+tools.cmake.cmaketoolchain:generator=Ninja
