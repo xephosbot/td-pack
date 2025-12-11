@@ -38,7 +38,7 @@ elif [ "$OS" = "macos" ]; then
     cmake --preset macos-arm64
     cmake --build --preset build-macos-arm64-install
   elif [ "$ARCH" = "x86_64" ]; then
-    conan install . -pr:b=profiles/macos_x86_64 -pr:h=profiles/macos_x86_64 --build=missing
+    conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_x86_64 --build=missing
     cmake --preset macos-x86_64
     cmake --build --preset build-macos-x86_64-install
   else
