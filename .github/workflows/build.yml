@@ -70,7 +70,7 @@ jobs:
 
       - name: Build TDLib
         run: |
-          chmod +x build-linux.sh
+          chmod +x build.sh
           ./build.sh macos ${{ matrix.arch }}
 
       - name: Upload macOS Artifacts
@@ -102,7 +102,7 @@ jobs:
 
       - name: Build TDLib
         run: |
-          chmod +x build-linux.sh
+          chmod +x build.sh
           ./build.sh linux ${{ matrix.arch }}
 
       - name: Upload Linux Artifacts
