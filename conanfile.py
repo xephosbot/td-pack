@@ -9,7 +9,7 @@ class TdLibRecipe(ConanFile):
 
     def requirements(self):
         self.requires("openssl/1.1.1w")
-        self.requires("zlib/1.2.13")
+        self.requires("zlib/1.3.1")
 
     def layout(self):
         cmake_layout(self, build_folder="build/conan")

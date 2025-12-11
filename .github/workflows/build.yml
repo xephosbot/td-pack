@@ -50,12 +50,10 @@ jobs:
           path: tdlib/android
 
   macos:
-    if: False
     runs-on: macos-latest
     strategy:
-        matrix:
-          arch: [arm64, x86_64]
-    
+      matrix:
+        arch: [x86_64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,17 +62,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install gperf cmake ninja
+          brew install cmake ninja
 
-      - name: Build OpenSSL
+      - name: Install Conan
         run: |
-          chmod +x build-openssl-macos.sh
-          ./build-openssl-macos.sh openssl third-party/openssl ${{ matrix.arch }}
+          pip install conan
 
       - name: Build TDLib
         run: |
-          chmod +x build-tdlib-macos.sh
-          ./build-tdlib-macos.sh td third-party/openssl ${{ matrix.arch }}
+          chmod +x build-linux.sh
+          ./build-linux.sh macos ${{ matrix.arch }}
 
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
@@ -99,9 +96,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build gperf gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-          echo "Debug: sysroot contents"
-          ls -l /usr/aarch64-linux-gnu/lib
-
       - name: Install Conan
         run: |
           pip install conan==2.*
@@ -118,7 +112,7 @@ jobs:
           path: tdlib/linux/${{ matrix.arch }}
 
   commit:
-    needs: [linux]
+    needs: [macos, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
