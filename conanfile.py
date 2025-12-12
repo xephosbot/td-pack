@@ -14,15 +14,19 @@ class TdLibRecipe(ConanFile):
     def layout(self):
         cmake_layout(self, build_folder="build/conan")
 
+    def configure(self):
+        self.options["openssl"].shared = False
+        self.options["zlib"].shared = False
+
     def generate(self):
         tc = CMakeToolchain(self)
+        tc.cache_variables["OPENSSL_USE_STATIC_LIBS"] = "TRUE"
+        tc.cache_variables["ZLIB_USE_STATIC_LIBS"] = "TRUE"
         tc.cache_variables["CMAKE_INSTALL_PREFIX"] = f"{self.source_folder}/tdlib/{self.settings.os}/{self.settings.arch}"
         tc.cache_variables["TD_INSTALL_SHARED_LIBRARIES"] = "ON"
         tc.cache_variables["TD_INSTALL_STATIC_LIBRARIES"] = "ON"
         tc.cache_variables["TD_ENABLE_JNI"] = "OFF"
         tc.cache_variables["TD_ENABLE_LTO"] = "OFF"
-        tc.cache_variables["TD_ENABLE_TESTS"] = "OFF"
-        tc.cache_variables["TD_ENABLE_BENCHMARKS"] = "OFF"
         tc.generate()
     
         deps = CMakeDeps(self)
