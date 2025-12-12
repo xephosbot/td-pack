@@ -5,7 +5,6 @@ class TdLibRecipe(ConanFile):
     name = "tdlib-repo"
     version = "1.0"
     settings = "os", "arch", "compiler", "build_type"
-    generators = ("CMakeDeps", "CMakeToolchain")
 
     def requirements(self):
         self.requires("openssl/3.6.0")
@@ -13,6 +12,14 @@ class TdLibRecipe(ConanFile):
 
     def layout(self):
         cmake_layout(self, build_folder="build/conan")
+
+    def generate(self):
+        tc = CMakeToolchain(self)
+        tc.user_presets_path = "ConanPresets.json"
+        tc.generate()
+    
+        deps = CMakeDeps(self)
+        deps.generate()
 
     def configure(self):
         self.options["openssl"].shared = False
