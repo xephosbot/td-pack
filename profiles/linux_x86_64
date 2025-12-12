@@ -10,4 +10,4 @@ build_type=Release
 tools.build:verbosity=quiet
 tools.compilation:verbosity=quiet
 tools.cmake.cmaketoolchain:generator=Ninja
-tools.cmake.cmaketoolchain:extra_cache_variables={'CMAKE_INSTALL_PREFIX': 'tdlib/linux/x86_64'}
+tools.cmake.cmaketoolchain:extra_variables={'CMAKE_INSTALL_PREFIX': 'tdlib/linux/x86_64'}
