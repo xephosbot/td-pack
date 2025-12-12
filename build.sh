@@ -17,7 +17,7 @@ if [ "$OS" = "linux" ]; then
   if [ "$ARCH" = "x86_64" ]; then
     conan install . -pr:b=profiles/linux_x86_64 -pr:h=profiles/linux_x86_64 --build=missing
     cmake --preset conan-release
-    cmake --build --preset conan-release --target install
+    cmake --build --preset conan-release --target tdjson_static
   elif [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
     # prepare generated files using native build
     conan install . -pr:b=profiles/linux_x86_64 -pr:h=profiles/linux_x86_64 --build=missing
@@ -26,7 +26,7 @@ if [ "$OS" = "linux" ]; then
 
     conan install . -pr:b=profiles/linux_x86_64 -pr:h=profiles/linux_aarch64 --build=missing
     cmake --preset conan-release
-    cmake --build --preset conan-release --target install
+    cmake --build --preset conan-release --target tdjson_static
   else
     echo "Unsupported Linux architecture: $ARCH"
     exit 1
@@ -35,16 +35,11 @@ elif [ "$OS" = "macos" ]; then
   if [ "$ARCH" = "arm64" ]; then 
     conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_arm64 --build=missing
     cmake --preset conan-release
-    cmake --build --preset conan-release --target install
+    cmake --build --preset conan-release --target tdjson_static
   elif [ "$ARCH" = "x86_64" ]; then
-    # prepare generated files using native build
     conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_x86_64 --build=missing
     cmake --preset conan-release
-    cmake --build --preset conan-release --target prepare_cross_compiling
-  
-    conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_x86_64 --build=missing
-    cmake --preset conan-release
-    cmake --build --preset conan-release --target install
+    cmake --build --preset conan-release --target tdjson_static
   else
     echo "Unsupported macOS architecture: $ARCH"
     exit 1
