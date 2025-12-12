@@ -10,3 +10,5 @@ build_type=Release
 tools.build:verbosity=quiet
 tools.compilation:verbosity=quiet
 tools.cmake.cmaketoolchain:generator=Ninja
+tools.build.cross_building:can_run=True
+tools.build.cross_building:cross_build=True
