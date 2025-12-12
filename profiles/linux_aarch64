@@ -11,4 +11,4 @@ tools.build:compiler_executables={"c":"aarch64-linux-gnu-gcc","cpp":"aarch64-lin
 tools.build:verbosity=quiet
 tools.compilation:verbosity=quiet
 tools.cmake.cmaketoolchain:generator=Ninja
-tools.cmake.cmaketoolchain:extra_cache_variables={'CMAKE_INSTALL_PREFIX': 'tdlib/linux/aarch64'}
+tools.cmake.cmaketoolchain:extra_variables={'CMAKE_INSTALL_PREFIX': 'tdlib/linux/aarch64'}
