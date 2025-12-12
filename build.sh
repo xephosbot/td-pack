@@ -36,12 +36,7 @@ if [ "$OS" = "linux" ]; then
     exit 1
   fi
 elif [ "$OS" = "macos" ]; then
-  if [ "$ARCH" = "arm64" ]; then
-    # prepare generated files using native build
-    conan install . -pr:b=profiles/macos_x86_64 -pr:h=profiles/macos_x86_64 --build=missing -c tools.apple:enable_bitcode=False
-    cmake --preset macos-x86_64
-    cmake --build --preset build-macos-arm64-prepare
-  
+  if [ "$ARCH" = "arm64" ]; then 
     conan install . -pr:b=profiles/macos_x86_64 -pr:h=profiles/macos_arm64 --build=missing -c tools.apple:enable_bitcode=False
     source build/conan/Release/generators/conanbuild.sh
     cmake --preset macos-arm64
