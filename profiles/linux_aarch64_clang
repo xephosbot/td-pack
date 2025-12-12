@@ -12,7 +12,7 @@ tools.build:verbosity=quiet
 tools.compilation:verbosity=quiet
 tools.cmake.cmaketoolchain:generator=Ninja
 tools.cmake.cmaketoolchain:extra_variables={'CMAKE_INSTALL_PREFIX': 'tdlib/linux/aarch64'}
-tools.build:cflags=["--target=aarch64-linux-gnu"]
-tools.build:cxxflags=["--target=aarch64-linux-gnu"]
+tools.build:cflags=["--target=aarch64-linux-gnu", "-I/usr/aarch64-linux-gnu/include"]
+tools.build:cxxflags=["--target=aarch64-linux-gnu", "-I/usr/aarch64-linux-gnu/include"]
 tools.build:sharedlinkflags=["--target=aarch64-linux-gnu"]
 tools.build:exelinkflags=["--target=aarch64-linux-gnu"]
