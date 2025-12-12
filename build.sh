@@ -24,7 +24,6 @@ if [ "$OS" = "linux" ]; then
     cmake --preset conan-release
     cmake --build --preset conan-release --target prepare_cross_compiling
 
-    # install cross deps (zlib/openssl) for aarch64 via conan
     conan install . -pr:b=profiles/linux_x86_64 -pr:h=profiles/linux_aarch64 --build=missing
     cmake --preset conan-release
     cmake --build --preset conan-release --target install
@@ -38,6 +37,11 @@ elif [ "$OS" = "macos" ]; then
     cmake --preset conan-release
     cmake --build --preset conan-release --target install
   elif [ "$ARCH" = "x86_64" ]; then
+    # prepare generated files using native build
+    conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_arm64 --build=missing
+    cmake --preset conan-release
+    cmake --build --preset conan-release --target prepare_cross_compiling
+  
     conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_x86_64 --build=missing
     cmake --preset conan-release
     cmake --build --preset conan-release --target install
