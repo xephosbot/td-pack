@@ -1,0 +1,24 @@
+{
+  "version": 4,
+  "include": ["ConanPresets.json"],
+
+  "configurePresets": [
+    {
+      "name": "dev-release",
+      "inherits": "conan-release",
+      "displayName": "Developer Release",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/${hostSystemName}/${hostSystemProcessor}",
+        "TD_ENABLE_JNI": "OFF",
+        "TD_ENABLE_LTO": "OFF"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    {
+      "name": "dev-release",
+      "configurePreset": "dev-release",
+    }
+  ]
+}
