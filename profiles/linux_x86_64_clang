@@ -10,5 +10,5 @@ build_type=Release
 tools.build:compiler_executables={"c":"clang","cpp":"clang++"}
 tools.build:verbosity=quiet
 tools.compilation:verbosity=quiet
+tools.gnu:make_args=["-s"]
 tools.cmake.cmaketoolchain:generator=Ninja
-tools.cmake.cmaketoolchain:extra_variables={'CMAKE_INSTALL_PREFIX': 'tdlib/linux/x86_64'}
