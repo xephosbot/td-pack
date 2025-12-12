@@ -107,7 +107,7 @@ jobs:
       - name: Build TDLib
         run: |
           chmod +x build.sh
-          ./build.sh linux ${{ matrix.arch }} clang
+          ./build.sh linux ${{ matrix.arch }}
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4

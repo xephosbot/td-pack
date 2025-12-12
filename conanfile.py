@@ -6,8 +6,11 @@ class TdLibRecipe(ConanFile):
     version = "1.0"
     settings = "os", "arch", "compiler", "build_type"
 
+    def build_requirements(self):
+        self.tool_requires("cmake/[>=3.31]")
+
     def requirements(self):
-        self.requires("openssl/3.6.0")
+        self.requires("openssl/3.3.0")
         self.requires("zlib/1.3.1")
 
     def layout(self):

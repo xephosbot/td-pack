@@ -1,14 +1,17 @@
 [settings]
 os=Linux
 arch=armv8
-compiler=gcc
-compiler.version=13
+compiler=clang
+compiler.version=15
 compiler.libcxx=libstdc++11
 build_type=Release
 
 [conf]
-tools.build:compiler_executables={"c":"aarch64-linux-gnu-gcc","cpp":"aarch64-linux-gnu-g++","ar":"aarch64-linux-gnu-ar","ranlib":"aarch64-linux-gnu-ranlib"}
+tools.build:compiler_executables={"c":"clang","cpp":"clang++"}
 tools.build:verbosity=quiet
 tools.compilation:verbosity=quiet
 tools.cmake.cmaketoolchain:generator=Ninja
-tools.cmake.cmaketoolchain:extra_variables={'CMAKE_INSTALL_PREFIX': 'tdlib/linux/aarch64'}
+tools.build:cflags=["--target=aarch64-linux-gnu", "-I/usr/aarch64-linux-gnu/include"]
+tools.build:cxxflags=["--target=aarch64-linux-gnu", "-I/usr/aarch64-linux-gnu/include"]
+tools.build:sharedlinkflags=["--target=aarch64-linux-gnu"]
+tools.build:exelinkflags=["--target=aarch64-linux-gnu"]
