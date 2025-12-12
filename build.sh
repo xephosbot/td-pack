@@ -40,12 +40,12 @@ elif [ "$OS" = "macos" ]; then
     conan install . -pr:b=profiles/macos_x86_64 -pr:h=profiles/macos_arm64 --build=missing -c tools.apple:enable_bitcode=False
     source build/conan/Release/generators/conanbuild.sh
     cmake --preset macos-arm64
-    cmake --build --preset conan-release
+    cmake --build --preset build-macos-arm64-install
   elif [ "$ARCH" = "x86_64" ]; then
     conan install . -pr:b=profiles/macos_x86_64 -pr:h=profiles/macos_x86_64 --build=missing
     source build/conan/Release/generators/conanbuild.sh
     cmake --preset macos-x86_64
-    cmake --build --preset conan-release
+    cmake --build --preset build-macos-x86_64-install
   else
     echo "Unsupported macOS architecture: $ARCH"
     exit 1
