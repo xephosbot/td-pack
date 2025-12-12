@@ -94,7 +94,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build gperf gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y cmake ninja-build gperf \
+            clang-15 llvm-15 \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo ln -sf /usr/bin/clang-15 /usr/bin/clang
+          sudo ln -sf /usr/bin/clang++-15 /usr/bin/clang++
 
       - name: Install Conan
         run: |
@@ -103,7 +107,7 @@ jobs:
       - name: Build TDLib
         run: |
           chmod +x build.sh
-          ./build.sh linux ${{ matrix.arch }}
+          ./build.sh linux ${{ matrix.arch }} clang
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
