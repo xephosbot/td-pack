@@ -8,7 +8,7 @@
       "inherits": "conan-release",
       "displayName": "Developer Release",
       "cacheVariables": {
-        "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/${hostSystemName}"
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/${hostSystemName}",
         "TD_ENABLE_JNI": "OFF",
         "TD_ENABLE_LTO": "OFF"
       }
