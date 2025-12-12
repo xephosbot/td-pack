@@ -5,3 +5,11 @@ compiler=apple-clang
 compiler.version=15
 compiler.libcxx=libc++
 build_type=Release
+
+[conf]
+tools.cmake.cmaketoolchain:extra_variables={
+ "TD_INSTALL_STATIC_LIBRARIES":"ON",
+ "TD_INSTALL_SHARED_LIBRARIES":"ON",
+ "TD_ENABLE_LTO":"OFF",
+ "TD_ENABLE_JNI":"OFF"
+}
