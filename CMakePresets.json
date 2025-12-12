@@ -98,6 +98,6 @@
       "name": "build-macos-arm64-install",
       "configurePreset": "macos-arm64",
       "targets": ["install"]
-    },
+    }
   ]
 }
