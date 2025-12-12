@@ -53,3 +53,19 @@ else
   echo "Unsupported OS: $OS"
   exit 1
 fi
+
+GEN_DIR="build/conan/Release/generators"
+
+echo "====== conan_toolchain.cmake ======"
+if [ -f "$GEN_DIR/conan_toolchain.cmake" ]; then
+    cat "$GEN_DIR/conan_toolchain.cmake"
+else
+    echo "Файл не найден: $GEN_DIR/conan_toolchain.cmake"
+fi
+
+echo "====== CMakePresets.json ======"
+if [ -f "$GEN_DIR/CMakePresets.json" ]; then
+    cat "$GEN_DIR/CMakePresets.json"
+else
+    echo "Файл не найден: $GEN_DIR/CMakePresets.json"
+fi
