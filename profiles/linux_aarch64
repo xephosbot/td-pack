@@ -9,9 +9,11 @@ build_type=Release
 [conf]
 tools.build:compiler_executables={"c":"clang","cpp":"clang++"}
 tools.build:verbosity=quiet
-tools.compilation:verbosity=quiet
-tools.cmake.cmaketoolchain:generator=Ninja
+tools.build.cross_building:can_run=True
+tools.build.cross_building:cross_build=True
 tools.build:cflags=["--target=aarch64-linux-gnu", "-I/usr/aarch64-linux-gnu/include"]
 tools.build:cxxflags=["--target=aarch64-linux-gnu", "-I/usr/aarch64-linux-gnu/include"]
 tools.build:sharedlinkflags=["--target=aarch64-linux-gnu"]
 tools.build:exelinkflags=["--target=aarch64-linux-gnu"]
+tools.compilation:verbosity=quiet
+tools.cmake.cmaketoolchain:generator=Ninja
