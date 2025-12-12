@@ -10,7 +10,7 @@ class TdLibRecipe(ConanFile):
         self.tool_requires("cmake/[>=3.31]")
 
     def requirements(self):
-        self.requires("openssl/3.3.0")
+        self.requires("openssl/3.6.0")
         self.requires("zlib/1.3.1")
 
     def layout(self):
