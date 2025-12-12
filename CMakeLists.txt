@@ -30,6 +30,11 @@ if (CMAKE_CROSSCOMPILING)
     list(APPEND CMAKE_FIND_ROOT_PATH "${OPENSSL_ROOT_DIR}")
     add_subdirectory(${TD_DIR} td)
 
+    add_custom_target(prepare_then_install
+        COMMAND ${CMAKE_COMMAND} --build . --target prepare_cross_compiling
+        COMMAND ${CMAKE_COMMAND} --build . --target install
+    )
+
     add_library(tdjni SHARED "${TD_DIR}/example/java/td_jni.cpp")
 
     if (TD_ANDROID_JSON_JAVA)
