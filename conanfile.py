@@ -8,7 +8,7 @@ class TdLibRecipe(ConanFile):
     generators = ("CMakeDeps", "CMakeToolchain")
 
     def requirements(self):
-        self.requires("openssl/1.1.1w")
+        self.requires("openssl/3.6.0")
         self.requires("zlib/1.3.1")
 
     def layout(self):
