@@ -9,7 +9,6 @@
       "inherits": "conan-release",
       "binaryDir": "build/linux-x86_64",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/linux/x86_64",
         "TD_INSTALL_SHARED_LIBRARIES": "ON",
         "TD_INSTALL_STATIC_LIBRARIES": "ON",
@@ -22,7 +21,6 @@
       "inherits": "conan-release",
       "binaryDir": "build/linux-aarch64",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/linux/arm64",
         "TD_INSTALL_SHARED_LIBRARIES": "ON",
         "TD_INSTALL_STATIC_LIBRARIES": "ON",
@@ -35,7 +33,6 @@
       "inherits": "conan-release",
       "binaryDir": "build/macos-arm64",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/macos/arm64",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
         "TD_INSTALL_SHARED_LIBRARIES": "ON",
@@ -46,12 +43,9 @@
     },
     {
       "name": "macos-x86_64",
-      "displayName": "Configure for macOS x86_64",
-      "description": "macOS x86_64 build",
-      "binaryDir": "build/macos-x86_64",
       "inherits": "conan-release",
+      "binaryDir": "build/macos-x86_64",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/macos/x86_64",
         "CMAKE_OSX_ARCHITECTURES": "x86_64",
         "TD_INSTALL_SHARED_LIBRARIES": "ON",
