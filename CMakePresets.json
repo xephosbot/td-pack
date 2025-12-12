@@ -84,14 +84,20 @@
       "targets": ["install"]
     },
     {
+      "name": "build-macos-x86_64-install",
+      "configurePreset": "macos-x86_64",
+      "targets": ["install"]
+    },
+    {
+      "name": "build-macos-arm64-prepare",
+      "configurePreset": "macos-x86_64",
+      "description": "Prepare generated sources required for cross-compiling arm64",
+      "targets": ["prepare_cross_compiling"]
+    },
+    {
       "name": "build-macos-arm64-install",
       "configurePreset": "macos-arm64",
       "targets": ["install"]
     },
-    {
-      "name": "build-macos-x86_64-install",
-      "configurePreset": "macos-x86_64",
-      "targets": ["install"]
-    }
   ]
 }
