@@ -37,7 +37,7 @@ elif [ "$OS" = "macos" ]; then
     cmake --preset conan-release
     cmake --build --preset conan-release --target tdjson_static
   elif [ "$ARCH" = "x86_64" ]; then
-    conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_x86_64 --build=missing
+    conan install . -pr:b=profiles/macos_x86_64 -pr:h=profiles/macos_x86_64 --build=missing
     cmake --preset conan-release
     cmake --build --preset conan-release --target tdjson_static
   else
