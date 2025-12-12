@@ -39,7 +39,7 @@
       "displayName": "Configure for macOS ARM64",
       "description": "macOS ARM64 build",
       "binaryDir": "build/macos-arm64",
-      "inherits": "conan-release"
+      "inherits": "conan-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/macos/arm64",
@@ -55,7 +55,7 @@
       "displayName": "Configure for macOS x86_64",
       "description": "macOS x86_64 build",
       "binaryDir": "build/macos-x86_64",
-      "inherits": "conan-release"
+      "inherits": "conan-release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/macos/x86_64",
