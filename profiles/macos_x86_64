@@ -5,6 +5,3 @@ compiler=apple-clang
 compiler.version=15
 compiler.libcxx=libc++
 build_type=Release
-
-[conf]
-tools.build:compiler_executables={"c":"x86_64-apple-darwin clang", "cpp":"x86_64-apple-darwin clang++"}
