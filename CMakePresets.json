@@ -37,9 +37,11 @@
       "description": "macOS ARM64 build",
       "generator": "Ninja",
       "binaryDir": "build/macos-arm64",
+      "toolchainFile": "${sourceDir}/build/conan/Release/generators/conan_toolchain.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/macos/arm64",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
         "TD_INSTALL_SHARED_LIBRARIES": "ON",
         "TD_INSTALL_STATIC_LIBRARIES": "ON",
         "TD_ENABLE_JNI": "OFF",
@@ -52,9 +54,11 @@
       "description": "macOS x86_64 build",
       "generator": "Ninja",
       "binaryDir": "build/macos-x86_64",
+      "toolchainFile": "${sourceDir}/build/conan/Release/generators/conan_toolchain.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/tdlib/macos/x86_64",
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
         "TD_INSTALL_SHARED_LIBRARIES": "ON",
         "TD_INSTALL_STATIC_LIBRARIES": "ON",
         "TD_ENABLE_JNI": "OFF",
@@ -66,38 +70,28 @@
     {
       "name": "build-linux-x86_64-install",
       "configurePreset": "linux-x86_64",
-      "targets": [
-        "install"
-      ]
+      "targets": ["install"]
     },
     {
       "name": "build-linux-aarch64-prepare",
       "configurePreset": "linux-x86_64",
       "description": "Prepare generated sources required for cross-compiling aarch64",
-      "targets": [
-        "prepare_cross_compiling"
-      ]
+      "targets": ["prepare_cross_compiling"]
     },
     {
       "name": "build-linux-aarch64-install",
       "configurePreset": "linux-aarch64",
-      "targets": [
-        "install"
-      ]
+      "targets": ["install"]
     },
     {
       "name": "build-macos-arm64-install",
       "configurePreset": "macos-arm64",
-      "targets": [
-        "install"
-      ]
+      "targets": ["install"]
     },
     {
       "name": "build-macos-x86_64-install",
       "configurePreset": "macos-x86_64",
-      "targets": [
-        "install"
-      ]
+      "targets": ["install"]
     }
   ]
 }
