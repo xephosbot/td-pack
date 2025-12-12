@@ -38,7 +38,7 @@ elif [ "$OS" = "macos" ]; then
     cmake --build --preset conan-release --target install
   elif [ "$ARCH" = "x86_64" ]; then
     # prepare generated files using native build
-    conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_arm64 --build=missing
+    conan install . -pr:b=profiles/macos_arm64 -pr:h=profiles/macos_x86_64 --build=missing
     cmake --preset conan-release
     cmake --build --preset conan-release --target prepare_cross_compiling
   
