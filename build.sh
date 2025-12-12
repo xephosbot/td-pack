@@ -17,7 +17,7 @@ if [ "$OS" = "linux" ]; then
     cmake --preset dev-release
     cmake --build --preset dev-release --target install/strip
   elif [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-    conan install . -pr:b=profiles/linux_aarch64 -pr:h=profiles/linux_aarch64 --build=missing
+    conan install . -pr:b=profiles/linux_x86_64 -pr:h=profiles/linux_aarch64 --build=missing
     cmake --preset dev-release
     cmake --build --preset dev-release --target install/strip
   else
