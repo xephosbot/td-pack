@@ -18,7 +18,7 @@ if [ "$OS" = "linux" ]; then
     cmake --build --preset dev-release --target install/strip
   elif [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
     # prepare generated files using native build
-    conan install . -pr:b=profiles/linux_x86_64 -pr:h=profiles/linux_x86_64
+    conan install . -pr:b=profiles/linux_x86_64 -pr:h=profiles/linux_x86_64 --build=missing
     cmake --preset dev-release
     cmake --build --preset dev-release --target prepare_cross_compiling
 
