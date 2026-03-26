@@ -142,14 +142,11 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 Set-Location $RootDir
 
 New-Item -ItemType Directory -Force -Path "$InstallDir\lib" | Out-Null
-New-Item -ItemType Directory -Force -Path "$InstallDir\include\td\telegram" | Out-Null
 
 if ($EnableJni) {
-    # Copy JNI shared libraries
+    # Copy only the JNI shared library (DLL); import/static .lib files and
+    # headers are not needed -- the DLL is loaded by the JVM at runtime.
     Get-ChildItem -Path $BuildDirName -Recurse -Filter "tdjson*.dll" | ForEach-Object {
-        Copy-Item $_.FullName "$InstallDir\lib\" -Verbose
-    }
-    Get-ChildItem -Path $BuildDirName -Recurse -Filter "tdjson*.lib" | ForEach-Object {
         Copy-Item $_.FullName "$InstallDir\lib\" -Verbose
     }
 } else {
@@ -160,15 +157,16 @@ if ($EnableJni) {
     # Copy OpenSSL static libraries
     Copy-Item "$OpensslInstallDir\lib\libcrypto.lib" "$InstallDir\lib\" -ErrorAction SilentlyContinue -Verbose
     Copy-Item "$OpensslInstallDir\lib\libssl.lib" "$InstallDir\lib\" -ErrorAction SilentlyContinue -Verbose
-}
 
-# Copy headers
-$tdjsonExport = Get-ChildItem -Path $BuildDirName -Recurse -Filter "tdjson_export.h" | Select-Object -First 1
-if ($tdjsonExport) {
-    Copy-Item $tdjsonExport.FullName "$InstallDir\include\td\telegram\" -Verbose
+    # Copy headers (only for static builds)
+    New-Item -ItemType Directory -Force -Path "$InstallDir\include\td\telegram" | Out-Null
+    $tdjsonExport = Get-ChildItem -Path $BuildDirName -Recurse -Filter "tdjson_export.h" | Select-Object -First 1
+    if ($tdjsonExport) {
+        Copy-Item $tdjsonExport.FullName "$InstallDir\include\td\telegram\" -Verbose
+    }
+    Copy-Item "$TdSourceDir\td\telegram\td_json_client.h" "$InstallDir\include\" -Verbose
+    Copy-Item "$TdSourceDir\td\telegram\td_log.h" "$InstallDir\include\" -Verbose
 }
-Copy-Item "$TdSourceDir\td\telegram\td_json_client.h" "$InstallDir\include\" -Verbose
-Copy-Item "$TdSourceDir\td\telegram\td_log.h" "$InstallDir\include\" -Verbose
 
 # Clean build dir
 Remove-Item -Recurse -Force $BuildDirName -ErrorAction SilentlyContinue

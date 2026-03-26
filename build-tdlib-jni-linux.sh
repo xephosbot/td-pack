@@ -117,8 +117,8 @@ cd "$ROOT_DIR" || exit 1
 
 mkdir -p "$INSTALL_DIR/lib"
 
-# Copy shared library
-find "$BUILD_DIR" -name "libtdjson.so*" -exec cp -v {} "$INSTALL_DIR/lib/" \;
+# Copy shared library (preserve symlinks so libtdjson.so -> libtdjson.so.x.y.z)
+cp -av "$BUILD_DIR"/libtdjson.so* "$INSTALL_DIR/lib/"
 
 echo "Stripping shared libraries..."
 for f in "$INSTALL_DIR/lib"/*.so*; do

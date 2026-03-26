@@ -66,8 +66,8 @@ cd "$ROOT_DIR" || exit 1
 
 mkdir -p "$INSTALL_DIR/lib"
 
-# Copy shared library
-find "$BUILD_DIR" -name "libtdjson*.dylib" -exec cp -v {} "$INSTALL_DIR/lib/" \;
+# Copy shared library (preserve symlinks)
+cp -av "$BUILD_DIR"/libtdjson*.dylib "$INSTALL_DIR/lib/"
 
 echo "Stripping shared libraries..."
 if [ -d "$INSTALL_DIR/lib" ]; then
