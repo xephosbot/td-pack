@@ -3,6 +3,9 @@ name: Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # ──────────────────────────────────────────────────────────
   #  Detect TDLib version from submodule
@@ -386,6 +389,15 @@ jobs:
           echo "Archive contents:"
           tar tzf tdlib-all.tar.gz | head -50
 
+      - name: Create per-platform archives
+        run: |
+          cd artifacts
+          for dir in tdlib-*; do
+            [ -d "$dir" ] || continue
+            tar czf "${dir}.tar.gz" "$dir"
+            echo "Created ${dir}.tar.gz"
+          done
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -409,26 +421,7 @@ jobs:
             - **Windows**: x64, arm64
           files: |
             release/tdlib-all.tar.gz
+            artifacts/tdlib-*.tar.gz
           draft: false
           prerelease: false
           make_latest: true
-
-      - name: Upload individual platform archives
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.version.outputs.tdlib_version }}
-          files: |
-            artifacts/tdlib-android/**
-            artifacts/tdlib-ios-arm64/**
-            artifacts/tdlib-macos-arm64/**
-            artifacts/tdlib-macos-x86_64/**
-            artifacts/tdlib-macos-jni-arm64/**
-            artifacts/tdlib-macos-jni-x86_64/**
-            artifacts/tdlib-linux-x86_64/**
-            artifacts/tdlib-linux-arm64/**
-            artifacts/tdlib-linux-jni-x86_64/**
-            artifacts/tdlib-linux-jni-arm64/**
-            artifacts/tdlib-windows-x64/**
-            artifacts/tdlib-windows-arm64/**
-            artifacts/tdlib-windows-jni-x64/**
-            artifacts/tdlib-windows-jni-arm64/**
