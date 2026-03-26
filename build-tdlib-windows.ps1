@@ -72,6 +72,28 @@ if (Test-Path $InstallDir) {
 
 Write-Host "Building TDLib for Windows $Arch (JNI: $EnableJni)..."
 
+# For ARM64 cross-compilation: generate source files natively on x64 first,
+# because the code-generation tools (generate_mime_types_gperf, tl-parser)
+# are compiled as ARM64 and cannot run on the x64 host (exit code 216).
+$NativeBuildDir = $null
+if ($Arch -eq "arm64") {
+    Write-Host "Generating TDLib auto files natively (x64)..."
+    $NativeBuildDir = "build-tdlib-native-x64"
+    if (Test-Path $NativeBuildDir) {
+        Remove-Item -Recurse -Force $NativeBuildDir
+    }
+    New-Item -ItemType Directory -Force -Path $NativeBuildDir | Out-Null
+    Set-Location $NativeBuildDir
+
+    cmake $TdSourceDir -A x64
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+
+    cmake --build . --config Release --target prepare_cross_compiling -- /m
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+
+    Set-Location $RootDir
+}
+
 # Clean build dir
 if (Test-Path $BuildDirName) {
     Remove-Item -Recurse -Force $BuildDirName
@@ -89,6 +111,14 @@ $cmakeArgs = @(
     "-DCMAKE_INSTALL_PREFIX=$InstallDir",
     "-DTD_ENABLE_LTO=OFF"
 )
+
+if ($Arch -eq "arm64") {
+    # Tell CMake this is a cross-compilation so it skips running generators.
+    # Setting CMAKE_SYSTEM_NAME explicitly (even to the host value) makes
+    # CMake set CMAKE_CROSSCOMPILING=TRUE.
+    $cmakeArgs += "-DCMAKE_SYSTEM_NAME=Windows"
+    $cmakeArgs += "-DCMAKE_SYSTEM_PROCESSOR=ARM64"
+}
 
 if ($EnableJni) {
     $cmakeArgs += "-DTD_ENABLE_JNI=ON"
@@ -142,6 +172,9 @@ Copy-Item "$TdSourceDir\td\telegram\td_log.h" "$InstallDir\include\" -Verbose
 
 # Clean build dir
 Remove-Item -Recurse -Force $BuildDirName -ErrorAction SilentlyContinue
+if ($NativeBuildDir) {
+    Remove-Item -Recurse -Force $NativeBuildDir -ErrorAction SilentlyContinue
+}
 
 Write-Host "Done. TDLib Windows build stored in tdlib\$OutputSubdir\$Arch"
 Get-ChildItem "$InstallDir\lib" | Format-Table Name, Length
