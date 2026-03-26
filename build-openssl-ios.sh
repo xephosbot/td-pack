@@ -32,29 +32,49 @@ mkdir -p "$INSTALL_PATH"
 
 make distclean >/dev/null 2>&1 || true
 
-# iOS SDK path
-IOS_SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
 IOS_MIN_VERSION="13.0"
 
-if [ "$ARCH" = "arm64" ]; then
-    CONFIGURE_TARGET="ios64-cross"
-else
-    echo "Error: Only arm64 is supported for iOS device builds."
-    exit 1
-fi
+case "$ARCH" in
+    arm64)
+        IOS_SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+        CONFIGURE_TARGET="ios64-cross"
+        export CROSS_TOP="$(xcode-select --print-path)/Platforms/iPhoneOS.platform/Developer"
+        export CROSS_SDK="iPhoneOS.sdk"
+        export CC="$(xcrun --sdk iphoneos --find clang)"
+        EXTRA_FLAGS="-miphoneos-version-min=$IOS_MIN_VERSION"
+        ;;
+    arm64-simulator)
+        IOS_SDK_PATH=$(xcrun --sdk iphonesimulator --show-sdk-path)
+        CONFIGURE_TARGET="iossimulator-xcrun"
+        export CROSS_TOP="$(xcode-select --print-path)/Platforms/iPhoneSimulator.platform/Developer"
+        export CROSS_SDK="iPhoneSimulator.sdk"
+        export CC="$(xcrun --sdk iphonesimulator --find clang)"
+        export CFLAGS="-target arm64-apple-ios${IOS_MIN_VERSION}-simulator"
+        EXTRA_FLAGS="-mios-simulator-version-min=$IOS_MIN_VERSION"
+        ;;
+    x86_64-simulator)
+        IOS_SDK_PATH=$(xcrun --sdk iphonesimulator --show-sdk-path)
+        CONFIGURE_TARGET="iossimulator-xcrun"
+        export CROSS_TOP="$(xcode-select --print-path)/Platforms/iPhoneSimulator.platform/Developer"
+        export CROSS_SDK="iPhoneSimulator.sdk"
+        export CC="$(xcrun --sdk iphonesimulator --find clang)"
+        export CFLAGS="-target x86_64-apple-ios${IOS_MIN_VERSION}-simulator"
+        EXTRA_FLAGS="-mios-simulator-version-min=$IOS_MIN_VERSION"
+        ;;
+    *)
+        echo "Error: Unsupported architecture '$ARCH'. Supported: arm64, arm64-simulator, x86_64-simulator."
+        exit 1
+        ;;
+esac
 
 echo "Using OpenSSL target: $CONFIGURE_TARGET"
 echo "iOS SDK: $IOS_SDK_PATH"
-
-export CROSS_TOP="$(xcode-select --print-path)/Platforms/iPhoneOS.platform/Developer"
-export CROSS_SDK="iPhoneOS.sdk"
-export CC="$(xcrun --sdk iphoneos --find clang)"
 
 ./Configure "$CONFIGURE_TARGET" \
     --prefix="$INSTALL_PATH" \
     --openssldir="$INSTALL_PATH" \
     no-shared no-tests no-dso no-engine no-comp no-hw no-async \
-    -miphoneos-version-min="$IOS_MIN_VERSION" \
+    $EXTRA_FLAGS \
     >/dev/null || exit 1
 
 make -j"$(sysctl -n hw.ncpu)" >/dev/null || exit 1

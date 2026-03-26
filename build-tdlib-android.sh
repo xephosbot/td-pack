@@ -6,6 +6,7 @@ ANDROID_NDK_VERSION=${3:-29.0.14206865}
 OPENSSL_INSTALL_DIR=${4:-third-party/openssl}
 ANDROID_STL=${5:-c++_static}
 TDLIB_INTERFACE=${6:-JSONJava}
+ABI_FILTER=${7:-}
 
 if [ "$ANDROID_STL" != "c++_static" ] && [ "$ANDROID_STL" != "c++_shared" ] ; then
   echo 'Error: ANDROID_STL must be either "c++_static" or "c++_shared".'
@@ -59,7 +60,8 @@ cd ..
 rm -rf tdlib/android
 
 echo "Building TDLib..."
-for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
+ABIS="${ABI_FILTER:-arm64-v8a armeabi-v7a x86_64 x86}"
+for ABI in $ABIS ; do
   OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/android/$ABI"
   if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
       echo "Warning: OpenSSL for $ABI not found in $OPENSSL_ARCH_DIR. Skipping..."
@@ -74,6 +76,7 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
   cd "$BUILD_DIR"
 
   cmake -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+    -DANDROID_USE_LEGACY_TOOLCHAIN_FILE=OFF \
     -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
     -DCMAKE_BUILD_TYPE=MinSizeRel \
     -GNinja -DANDROID_ABI=$ABI \

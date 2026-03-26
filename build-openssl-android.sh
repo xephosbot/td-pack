@@ -5,6 +5,7 @@ ANDROID_NDK_VERSION=${2:-29.0.14206865}
 OPENSSL_SOURCE_DIR=${3:-openssl}
 OPENSSL_INSTALL_DIR=${4:-third-party/openssl}
 BUILD_SHARED_LIBS=$5
+ABI_FILTER=${6:-}
 
 cd "$(dirname "$0")"
 ROOT_DIR="$(pwd)"
@@ -67,7 +68,8 @@ fi
 
 SHARED_BUILD_OPTION=$([ "$BUILD_SHARED_LIBS" ] && echo "shared" || echo "no-shared")
 
-for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
+ABIS="${ABI_FILTER:-arm64-v8a armeabi-v7a x86_64 x86}"
+for ABI in $ABIS ; do
   if [[ $ABI == "x86" ]] ; then
     export ANDROID_NDK=$ANDROID_NDK_ROOT
     ./Configure android-x86 ${SHARED_BUILD_OPTION} -U__ANDROID_API__ -D__ANDROID_API__=$ANDROID_API32 || exit 1
