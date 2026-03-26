@@ -3,9 +3,34 @@ name: Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  # ──────────────────────────────────────────────────────────
+  #  Detect TDLib version from submodule
+  # ──────────────────────────────────────────────────────────
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tdlib_version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Extract TDLib version
+        id: version
+        run: |
+          VERSION=$(grep -oP 'project\(TDLib\s+VERSION\s+\K[0-9.]+' td/CMakeLists.txt || echo "unknown")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "TDLib version: $VERSION"
+
+  # ──────────────────────────────────────────────────────────
+  #  Android (all ABIs in one job)
+  # ──────────────────────────────────────────────────────────
   android:
-    if: False
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -49,12 +74,46 @@ jobs:
           name: tdlib-android
           path: tdlib/android
 
+  # ──────────────────────────────────────────────────────────
+  #  iOS (arm64 only)
+  # ──────────────────────────────────────────────────────────
+  ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          brew install gperf cmake ninja
+
+      - name: Build OpenSSL
+        run: |
+          chmod +x build-openssl-ios.sh
+          ./build-openssl-ios.sh openssl third-party/openssl arm64
+
+      - name: Build TDLib
+        run: |
+          chmod +x build-tdlib-ios.sh
+          ./build-tdlib-ios.sh td third-party/openssl arm64
+
+      - name: Upload iOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-ios-arm64
+          path: tdlib/ios/arm64
+
+  # ──────────────────────────────────────────────────────────
+  #  macOS static (arm64, x86_64)
+  # ──────────────────────────────────────────────────────────
   macos:
     runs-on: macos-latest
     strategy:
-        matrix:
-          arch: [arm64, x86_64]
-    
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,12 +140,50 @@ jobs:
           name: tdlib-macos-${{ matrix.arch }}
           path: tdlib/macos/${{ matrix.arch }}
 
+  # ──────────────────────────────────────────────────────────
+  #  macOS JNI (arm64, x86_64)
+  # ──────────────────────────────────────────────────────────
+  macos-jni:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          brew install gperf cmake ninja
+
+      - name: Build OpenSSL
+        run: |
+          chmod +x build-openssl-macos.sh
+          ./build-openssl-macos.sh openssl third-party/openssl ${{ matrix.arch }}
+
+      - name: Build TDLib JNI
+        run: |
+          chmod +x build-tdlib-jni-macos.sh
+          ./build-tdlib-jni-macos.sh td third-party/openssl ${{ matrix.arch }}
+
+      - name: Upload macOS JNI Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-macos-jni-${{ matrix.arch }}
+          path: tdlib/macos-jni/${{ matrix.arch }}
+
+  # ──────────────────────────────────────────────────────────
+  #  Linux static (x86_64, arm64)
+  # ──────────────────────────────────────────────────────────
   linux:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86_64, arm64]
-        
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,7 +201,7 @@ jobs:
           curl -LO https://zlib.net/zlib-1.3.1.tar.gz
           tar xf zlib-1.3.1.tar.gz
           cd zlib-1.3.1
-          
+
           CC=aarch64-linux-gnu-gcc \
           AR=aarch64-linux-gnu-ar \
           RANLIB=aarch64-linux-gnu-ranlib \
@@ -129,33 +226,208 @@ jobs:
           name: tdlib-linux-${{ matrix.arch }}
           path: tdlib/linux/${{ matrix.arch }}
 
-  commit:
-    needs: [macos, linux]
+  # ──────────────────────────────────────────────────────────
+  #  Linux JNI (x86_64, arm64)
+  # ──────────────────────────────────────────────────────────
+  linux-jni:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Download Android Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: tdlib-android
-          path: tdlib/android
-
-      - name: Download macOS Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: tdlib-macos
-          path: tdlib/macos
-
-      - name: Commit and Push
+      - name: Install dependencies
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add tdlib
-          git commit -m "Update compiled libs [skip ci]" || echo "No changes to commit"
-          git push
+          sudo apt-get update
+          sudo apt-get install -y cmake zlib1g-dev gperf ninja-build gcc-aarch64-linux-gnu g++-aarch64-linux-gnu default-jdk
+
+      - name: Build zlib
+        if: matrix.arch == 'arm64'
+        run: |
+          curl -LO https://zlib.net/zlib-1.3.1.tar.gz
+          tar xf zlib-1.3.1.tar.gz
+          cd zlib-1.3.1
+
+          CC=aarch64-linux-gnu-gcc \
+          AR=aarch64-linux-gnu-ar \
+          RANLIB=aarch64-linux-gnu-ranlib \
+          ./configure --prefix=/usr/local/arm64 --static
+
+          make -j$(nproc)
+          sudo make install
+
+      - name: Build OpenSSL
+        run: |
+          chmod +x build-openssl-linux.sh
+          ./build-openssl-linux.sh openssl third-party/openssl ${{ matrix.arch }}
+
+      - name: Build TDLib JNI
+        run: |
+          chmod +x build-tdlib-jni-linux.sh
+          ./build-tdlib-jni-linux.sh td third-party/openssl ${{ matrix.arch }}
+
+      - name: Upload Linux JNI Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-linux-jni-${{ matrix.arch }}
+          path: tdlib/linux-jni/${{ matrix.arch }}
+
+  # ──────────────────────────────────────────────────────────
+  #  Windows static (x64, arm64)
+  # ──────────────────────────────────────────────────────────
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          choco install gperf strawberryperl nasm -y
+          echo "C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      - name: Build OpenSSL
+        run: |
+          .\build-openssl-windows.ps1 -OpensslSourceDir openssl -OpensslInstallDir third-party\openssl -Arch ${{ matrix.arch }}
+
+      - name: Build TDLib
+        run: |
+          .\build-tdlib-windows.ps1 -TdSourceDir td -OpensslInstallDir third-party\openssl -Arch ${{ matrix.arch }}
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-windows-${{ matrix.arch }}
+          path: tdlib/windows/${{ matrix.arch }}
+
+  # ──────────────────────────────────────────────────────────
+  #  Windows JNI (x64, arm64)
+  # ──────────────────────────────────────────────────────────
+  windows-jni:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          choco install gperf strawberryperl nasm -y
+          echo "C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      - name: Build OpenSSL
+        run: |
+          .\build-openssl-windows.ps1 -OpensslSourceDir openssl -OpensslInstallDir third-party\openssl -Arch ${{ matrix.arch }}
+
+      - name: Build TDLib JNI
+        run: |
+          .\build-tdlib-windows.ps1 -TdSourceDir td -OpensslInstallDir third-party\openssl -Arch ${{ matrix.arch }} -EnableJni
+
+      - name: Upload Windows JNI Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-windows-jni-${{ matrix.arch }}
+          path: tdlib/windows-jni/${{ matrix.arch }}
+
+  # ──────────────────────────────────────────────────────────
+  #  Release: collect all artifacts
+  # ──────────────────────────────────────────────────────────
+  release:
+    needs: [version, android, ios, macos, macos-jni, linux, linux-jni, windows, windows-jni]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Reorganize artifacts
+        run: |
+          mkdir -p release/tdlib
+          # Move each artifact into the correct directory structure
+          for dir in artifacts/tdlib-*; do
+            [ -d "$dir" ] || continue
+            name=$(basename "$dir")
+            # Strip "tdlib-" prefix to get platform info
+            platform_info="${name#tdlib-}"
+            mkdir -p "release/tdlib/$platform_info"
+            cp -r "$dir"/* "release/tdlib/$platform_info/" 2>/dev/null || true
+          done
+          # Create archives
+          cd release
+          tar czf tdlib-all.tar.gz tdlib/
+          echo "Archive contents:"
+          tar tzf tdlib-all.tar.gz | head -50
+
+      - name: Create per-platform archives
+        run: |
+          cd artifacts
+          for dir in tdlib-*; do
+            [ -d "$dir" ] || continue
+            tar czf "${dir}.tar.gz" "$dir"
+            echo "Created ${dir}.tar.gz"
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.tdlib_version }}
+          name: TDLib ${{ needs.version.outputs.tdlib_version }}
+          body: |
+            Prebuilt TDLib libraries for version ${{ needs.version.outputs.tdlib_version }}.
+
+            ## Platforms
+
+            ### Native static libraries (for Kotlin/Native, C/C++)
+            - **iOS**: arm64
+            - **macOS**: arm64, x86_64
+            - **Linux**: x86_64, arm64
+            - **Windows**: x64, arm64
+
+            ### JNI shared libraries (for JVM / Android)
+            - **Android**: arm64-v8a, armeabi-v7a, x86_64, x86
+            - **macOS**: arm64, x86_64
+            - **Linux**: x86_64, arm64
+            - **Windows**: x64, arm64
+          files: |
+            release/tdlib-all.tar.gz
+            artifacts/tdlib-*.tar.gz
+          draft: false
+          prerelease: false
+          make_latest: true
