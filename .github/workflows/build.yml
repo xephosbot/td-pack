@@ -31,10 +31,14 @@ jobs:
           echo "TDLib version: $VERSION"
 
   # ──────────────────────────────────────────────────────────
-  #  Android (all ABIs in one job)
+  #  Android (parallel per ABI)
   # ──────────────────────────────────────────────────────────
   android:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64, x86]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,24 +68,28 @@ jobs:
       - name: Build OpenSSL
         run: |
           chmod +x build-openssl-android.sh
-          ./build-openssl-android.sh $ANDROID_HOME 26.3.11579264 openssl third-party/openssl
+          ./build-openssl-android.sh $ANDROID_HOME 26.3.11579264 openssl third-party/openssl "" ${{ matrix.abi }}
 
       - name: Build TDLib
         run: |
           chmod +x build-tdlib-android.sh
-          ./build-tdlib-android.sh td $ANDROID_HOME 26.3.11579264 third-party/openssl c++_static JSONJava
+          ./build-tdlib-android.sh td $ANDROID_HOME 26.3.11579264 third-party/openssl c++_static JSONJava ${{ matrix.abi }}
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tdlib-android
-          path: tdlib/android
+          name: tdlib-android-${{ matrix.abi }}
+          path: tdlib/android/${{ matrix.abi }}
 
   # ──────────────────────────────────────────────────────────
-  #  iOS (arm64 only)
+  #  iOS (arm64 device + simulators for KMP)
   # ──────────────────────────────────────────────────────────
   ios:
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, arm64-simulator, x86_64-simulator]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -95,18 +103,18 @@ jobs:
       - name: Build OpenSSL
         run: |
           chmod +x build-openssl-ios.sh
-          ./build-openssl-ios.sh openssl third-party/openssl arm64
+          ./build-openssl-ios.sh openssl third-party/openssl ${{ matrix.arch }}
 
       - name: Build TDLib
         run: |
           chmod +x build-tdlib-ios.sh
-          ./build-tdlib-ios.sh td third-party/openssl arm64
+          ./build-tdlib-ios.sh td third-party/openssl ${{ matrix.arch }}
 
       - name: Upload iOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tdlib-ios-arm64
-          path: tdlib/ios/arm64
+          name: tdlib-ios-${{ matrix.arch }}
+          path: tdlib/ios/${{ matrix.arch }}
 
   # ──────────────────────────────────────────────────────────
   #  macOS static (arm64, x86_64)
@@ -446,7 +454,7 @@ jobs:
             ## Platforms
 
             ### Native static libraries (for Kotlin/Native, C/C++)
-            - **iOS**: arm64
+            - **iOS**: arm64, arm64-simulator (iosSimulatorArm64), x86_64-simulator (iosX64)
             - **macOS**: arm64, x86_64
             - **Linux**: x86_64, arm64
             - **Windows**: x64, arm64

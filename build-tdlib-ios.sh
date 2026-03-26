@@ -31,10 +31,26 @@ for tool in cmake gperf; do
     fi
 done
 
-if [ "$ARCH" != "arm64" ]; then
-    echo "Error: Only arm64 is supported for iOS device builds."
+if [ "$ARCH" != "arm64" ] && [ "$ARCH" != "arm64-simulator" ] && [ "$ARCH" != "x86_64-simulator" ]; then
+    echo "Error: Unsupported architecture '$ARCH'. Supported: arm64, arm64-simulator, x86_64-simulator."
     exit 1
 fi
+
+# Determine the actual CPU architecture and SDK for CMake
+case "$ARCH" in
+    arm64)
+        CMAKE_ARCH="arm64"
+        CMAKE_SDK="iphoneos"
+        ;;
+    arm64-simulator)
+        CMAKE_ARCH="arm64"
+        CMAKE_SDK="iphonesimulator"
+        ;;
+    x86_64-simulator)
+        CMAKE_ARCH="x86_64"
+        CMAKE_SDK="iphonesimulator"
+        ;;
+esac
 
 OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
 if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
@@ -61,7 +77,8 @@ IOS_MIN_VERSION="13.0"
 cmake "$TD_SOURCE_DIR" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_SYSTEM_NAME=iOS \
-    -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
+    -DCMAKE_OSX_ARCHITECTURES="$CMAKE_ARCH" \
+    -DCMAKE_OSX_SYSROOT="$CMAKE_SDK" \
     -DCMAKE_OSX_DEPLOYMENT_TARGET="$IOS_MIN_VERSION" \
     -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
     -DOPENSSL_CRYPTO_LIBRARY="$OPENSSL_ARCH_DIR/lib/libcrypto.a" \
