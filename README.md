@@ -204,14 +204,16 @@ targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
 }
 ```
 
-With this approach, the `.def` file can be simplified:
+With this approach, the `.def` file can be simplified — Gradle sets the include/library search paths, while the `.def` only lists library names and platform-specific flags:
 
 ```def
 headers = td_json_client.h td_log.h
 headerFilter = td_json_client.h td_log.h td/telegram/**
 
+# Library names only (search paths are set by Gradle above)
 linkerOpts = -ltdjson_static -ltdjson_private -ltdclient -ltdcore -ltddb -ltdsqlite -ltdnet -ltdactor -ltdutils -lssl -lcrypto -lz
 
+# Platform-specific system libraries
 linkerOpts.osx = -lc++
 linkerOpts.linux_x64 = -lstdc++ -lm -ldl -lpthread
 linkerOpts.ios_arm64 = -lc++
