@@ -58,6 +58,18 @@ if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
     exit 1
 fi
 
+# Generate TDLib auto files natively (required for cross-compilation)
+echo "Generating TDLib auto files..."
+HOST_BUILD_DIR="build-tdlib-native-ios"
+rm -rf "$HOST_BUILD_DIR"
+mkdir "$HOST_BUILD_DIR"
+cd "$HOST_BUILD_DIR" || exit 1
+
+cmake "$TD_SOURCE_DIR"
+cmake --build . --target prepare_cross_compiling -j"$(sysctl -n hw.ncpu)" || exit 1
+
+cd "$ROOT_DIR" || exit 1
+
 # Output directory
 rm -rf "tdlib/ios/$ARCH"
 
@@ -117,6 +129,7 @@ if [ -d "$INSTALL_DIR/lib" ]; then
 fi
 
 rm -rf "$BUILD_DIR"
+rm -rf "$HOST_BUILD_DIR"
 
 echo "Done. TDLib iOS build stored in tdlib/ios/$ARCH"
 ls -lh "$INSTALL_DIR/lib"

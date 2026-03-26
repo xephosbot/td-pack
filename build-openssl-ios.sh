@@ -49,7 +49,7 @@ case "$ARCH" in
         export CROSS_TOP="$(xcode-select --print-path)/Platforms/iPhoneSimulator.platform/Developer"
         export CROSS_SDK="iPhoneSimulator.sdk"
         export CC="$(xcrun --sdk iphonesimulator --find clang)"
-        export CFLAGS="-target arm64-apple-ios${IOS_MIN_VERSION}-simulator"
+        export CFLAGS="-target arm64-apple-ios${IOS_MIN_VERSION}-simulator -isysroot $IOS_SDK_PATH"
         EXTRA_FLAGS="-mios-simulator-version-min=$IOS_MIN_VERSION"
         ;;
     x86_64-simulator)
@@ -58,7 +58,7 @@ case "$ARCH" in
         export CROSS_TOP="$(xcode-select --print-path)/Platforms/iPhoneSimulator.platform/Developer"
         export CROSS_SDK="iPhoneSimulator.sdk"
         export CC="$(xcrun --sdk iphonesimulator --find clang)"
-        export CFLAGS="-target x86_64-apple-ios${IOS_MIN_VERSION}-simulator"
+        export CFLAGS="-target x86_64-apple-ios${IOS_MIN_VERSION}-simulator -isysroot $IOS_SDK_PATH"
         EXTRA_FLAGS="-mios-simulator-version-min=$IOS_MIN_VERSION"
         ;;
     *)
