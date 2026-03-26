@@ -111,6 +111,7 @@ jobs:
   macos:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [arm64, x86_64]
     steps:
@@ -145,6 +146,7 @@ jobs:
   macos-jni:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [arm64, x86_64]
     steps:
@@ -179,6 +181,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86_64, arm64]
     steps:
@@ -229,6 +232,7 @@ jobs:
   linux-jni:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86_64, arm64]
     steps:
@@ -279,6 +283,7 @@ jobs:
   windows:
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x64, arm64]
     steps:
@@ -318,6 +323,7 @@ jobs:
   windows-jni:
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x64, arm64]
     steps:
