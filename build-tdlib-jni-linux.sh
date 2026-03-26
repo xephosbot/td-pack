@@ -51,11 +51,31 @@ if [ "$ARCH" = "arm64" ]; then
     export ZLIB_LIBRARY=/usr/local/arm64/lib/libz.a
     export ZLIB_INCLUDE_DIR=/usr/local/arm64/include
 
+    # Detect JAVA_HOME for JNI headers (arch-independent)
+    if [ -z "$JAVA_HOME" ]; then
+        if command -v javac &> /dev/null; then
+            JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(which javac)")")")
+        fi
+    fi
+    if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME/include" ]; then
+        echo "Error: Could not find JAVA_HOME with JNI headers. Install a JDK or set JAVA_HOME."
+        exit 1
+    fi
+    echo "Using JAVA_HOME=$JAVA_HOME for JNI headers"
+
     CMAKE_TOOLCHAIN_ARGS=(
         -DCMAKE_SYSTEM_NAME=Linux
         -DCMAKE_SYSTEM_PROCESSOR=aarch64
         -DCMAKE_C_COMPILER="$CC"
         -DCMAKE_CXX_COMPILER="$CXX"
+        # Pre-set JNI variables to avoid find_package(JNI) finding the host x86_64 libjvm.so.
+        # JNI headers are architecture-independent, so we use the host JDK headers.
+        # JAVA_JVM_LIBRARY is intentionally left empty: libtdjson.so is loaded by the JVM
+        # at runtime, so it does not need to link against libjvm.so at build time.
+        -DJNI_FOUND=TRUE
+        -DJAVA_INCLUDE_PATH="$JAVA_HOME/include"
+        -DJAVA_INCLUDE_PATH2="$JAVA_HOME/include/linux"
+        -DJAVA_JVM_LIBRARY=""
     )
 else
     echo "Using native x86_64 toolchain"
