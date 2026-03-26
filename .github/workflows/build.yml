@@ -3,6 +3,9 @@ name: Build
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 
@@ -87,7 +90,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install gperf cmake ninja
+          brew install gperf
 
       - name: Build OpenSSL
         run: |
@@ -122,7 +125,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install gperf cmake ninja
+          brew install gperf
 
       - name: Build OpenSSL
         run: |
@@ -157,7 +160,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install gperf cmake ninja
+          brew install gperf
 
       - name: Build OpenSSL
         run: |

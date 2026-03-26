@@ -74,6 +74,7 @@ for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do
   cd "$BUILD_DIR"
 
   cmake -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" \
+    -DANDROID_USE_LEGACY_TOOLCHAIN_FILE=OFF \
     -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
     -DCMAKE_BUILD_TYPE=MinSizeRel \
     -GNinja -DANDROID_ABI=$ABI \
