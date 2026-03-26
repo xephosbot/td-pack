@@ -18,8 +18,8 @@ fi
 
 OPENSSL_INSTALL_DIR="$ROOT_DIR/$OPENSSL_INSTALL_DIR/linux"
 
-if [ -d "$OPENSSL_INSTALL_DIR" ]; then
-  echo "Error: directory \"$OPENSSL_INSTALL_DIR\" already exists. Delete it manually to proceed."
+if [ -d "$OPENSSL_INSTALL_DIR/$ARCH" ]; then
+  echo "Error: directory \"$OPENSSL_INSTALL_DIR/$ARCH\" already exists. Delete it manually to proceed."
   exit 1
 fi
 
