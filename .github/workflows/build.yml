@@ -454,7 +454,7 @@ jobs:
             ## Platforms
 
             ### Native static libraries (for Kotlin/Native, C/C++)
-            - **iOS**: arm64, arm64-simulator (iosSimulatorArm64), x86_64-simulator (iosX64)
+            - **iOS**: arm64, arm64-simulator, x86_64-simulator
             - **macOS**: arm64, x86_64
             - **Linux**: x86_64, arm64
             - **Windows**: x64, arm64
