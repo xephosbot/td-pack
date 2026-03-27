@@ -39,6 +39,7 @@ if (CMAKE_CROSSCOMPILING)
   add_subdirectory(${TD_DIR} td)
 
   add_library(tdjni SHARED "${TD_DIR}/example/java/td_jni.cpp")
+  target_include_directories(tdjni SYSTEM PRIVATE ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
 
   if (TD_ANDROID_JSON_JAVA)
     target_link_libraries(tdjni PRIVATE Td::TdJsonStatic)
