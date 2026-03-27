@@ -37,6 +37,18 @@ if [ "$ARCH" = "arm64" ]; then
     cd "$ROOT_DIR" || exit 1
 fi
 
+# Detect JAVA_HOME for JNI headers (arch-independent)
+if [ -z "$JAVA_HOME" ]; then
+    if command -v javac &> /dev/null; then
+        JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(which javac)")")")
+    fi
+fi
+if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME/include" ]; then
+    echo "Error: Could not find JAVA_HOME with JNI headers. Install a JDK or set JAVA_HOME."
+    exit 1
+fi
+echo "Using JAVA_HOME=$JAVA_HOME for JNI headers"
+
 # Pick proper compiler per-arch
 if [ "$ARCH" = "arm64" ]; then
     echo "Using system ARM64 cross-compiler"
@@ -45,23 +57,10 @@ if [ "$ARCH" = "arm64" ]; then
     export AR=aarch64-linux-gnu-ar
     export RANLIB=aarch64-linux-gnu-ranlib
     export LD=aarch64-linux-gnu-ld
-    export STRIP=aarch64-linux-gnu-strip
 
     export ZLIB_ROOT=/usr/local/arm64
     export ZLIB_LIBRARY=/usr/local/arm64/lib/libz.a
     export ZLIB_INCLUDE_DIR=/usr/local/arm64/include
-
-    # Detect JAVA_HOME for JNI headers (arch-independent)
-    if [ -z "$JAVA_HOME" ]; then
-        if command -v javac &> /dev/null; then
-            JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(which javac)")")")
-        fi
-    fi
-    if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME/include" ]; then
-        echo "Error: Could not find JAVA_HOME with JNI headers. Install a JDK or set JAVA_HOME."
-        exit 1
-    fi
-    echo "Using JAVA_HOME=$JAVA_HOME for JNI headers"
 
     CMAKE_TOOLCHAIN_ARGS=(
         -DCMAKE_SYSTEM_NAME=Linux
@@ -70,7 +69,7 @@ if [ "$ARCH" = "arm64" ]; then
         -DCMAKE_CXX_COMPILER="$CXX"
         # Pre-set JNI variables to avoid find_package(JNI) finding the host x86_64 libjvm.so.
         # JNI headers are architecture-independent, so we use the host JDK headers.
-        # JAVA_JVM_LIBRARY is intentionally left empty: libtdjson.so is loaded by the JVM
+        # JAVA_JVM_LIBRARY is intentionally left empty: libtdjsonjava.so is loaded by the JVM
         # at runtime, so it does not need to link against libjvm.so at build time.
         -DJNI_FOUND=TRUE
         -DJAVA_INCLUDE_PATH="$JAVA_HOME/include"
@@ -80,9 +79,20 @@ if [ "$ARCH" = "arm64" ]; then
 else
     echo "Using native x86_64 toolchain"
     unset CC CXX AR RANLIB LD ZLIB_ROOT ZLIB_LIBRARY ZLIB_INCLUDE_DIR
-    export STRIP=strip
 
-    CMAKE_TOOLCHAIN_ARGS=()
+    # Force CMake cross-compiling mode so the root CMakeLists.txt enters the
+    # if (CMAKE_CROSSCOMPILING) branch that builds the tdjni target.
+    CMAKE_TOOLCHAIN_ARGS=(
+        -DCMAKE_SYSTEM_NAME=Linux
+        -DCMAKE_SYSTEM_PROCESSOR=x86_64
+        # Pre-set JNI variables to prevent find_package(JNI) from linking libjvm.so.
+        # JAVA_JVM_LIBRARY is intentionally left empty: libtdjsonjava.so is loaded by
+        # the JVM at runtime and does not need to link against libjvm.so at build time.
+        -DJNI_FOUND=TRUE
+        -DJAVA_INCLUDE_PATH="$JAVA_HOME/include"
+        -DJAVA_INCLUDE_PATH2="$JAVA_HOME/include/linux"
+        -DJAVA_JVM_LIBRARY=""
+    )
 fi
 
 OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
@@ -91,7 +101,7 @@ if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
     exit 1
 fi
 
-echo "Starting TDLib Linux JNI build for $ARCH..."
+echo "Starting TDLib Linux JNI build (libtdjsonjava) for $ARCH..."
 
 BUILD_DIR="build-tdlib-jni-linux-$ARCH"
 INSTALL_DIR="$ROOT_DIR/tdlib/linux-jni/$ARCH"
@@ -100,35 +110,35 @@ rm -rf "$BUILD_DIR"
 rm -rf "$INSTALL_DIR"
 mkdir -p "$BUILD_DIR"
 
+# Apply package name patch; revert it once the build finishes (or on error).
+git -C "$ROOT_DIR" apply patches/custom-package-name.patch || exit 1
+revert_patch() { git -C "$ROOT_DIR" checkout -- CMakeLists.txt; }
+trap revert_patch EXIT
+
 cd "$BUILD_DIR" || exit 1
 
-cmake "$TD_SOURCE_DIR" \
-    -DCMAKE_BUILD_TYPE=Release \
+# Build against the root CMakeLists.txt which contains the tdjni target and
+# TD_ANDROID_JSON_JAVA logic.  This produces libtdjsonjava.so with JNI_OnLoad
+# and RegisterNatives bound to io.xbot.tdlib.JsonClient.
+cmake "$ROOT_DIR" \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DOPENSSL_ROOT_DIR="$OPENSSL_ARCH_DIR" \
-    -DTD_ENABLE_JNI=ON \
-    -DTD_ENABLE_LTO=OFF \
+    -DTD_ANDROID_JSON_JAVA=ON \
     "${CMAKE_TOOLCHAIN_ARGS[@]}" \
     || exit 1
 
-echo "Building tdjson (shared) for Linux $ARCH..."
-cmake --build . --target tdjson -j"$(nproc)" || exit 1
+echo "Building tdjni (libtdjsonjava) for Linux $ARCH..."
+cmake --build . --target tdjni -j"$(nproc)" || exit 1
 
 cd "$ROOT_DIR" || exit 1
 
 mkdir -p "$INSTALL_DIR/lib"
 
-# Copy shared library (preserve symlinks so libtdjson.so -> libtdjson.so.x.y.z)
-cp -av "$BUILD_DIR"/libtdjson.so* "$INSTALL_DIR/lib/"
-
-echo "Stripping shared libraries..."
-for f in "$INSTALL_DIR/lib"/*.so*; do
-    [ -f "$f" ] || continue
-    echo "  stripping $(basename "$f")"
-    "$STRIP" --strip-unneeded "$f" 2>/dev/null || true
-done
+# Copy shared library (stripping is done by the CMakeLists.txt POST_BUILD step).
+cp -av "$BUILD_DIR"/libtdjsonjava.so* "$INSTALL_DIR/lib/"
 
 rm -rf "$BUILD_DIR"
 rm -rf "$HOST_BUILD_DIR" 2>/dev/null
 
-echo "Done! TDLib Linux JNI build stored in tdlib/linux-jni/$ARCH"
+echo "Done! TDLib Linux JNI build (libtdjsonjava) stored in tdlib/linux-jni/$ARCH"
 ls -lh "$INSTALL_DIR/lib/"

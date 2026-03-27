@@ -15,12 +15,18 @@ Prebuilt [TDLib](https://github.com/tdlib/td) static libraries and headers for a
 
 ### JNI shared libraries (for JVM / Android)
 
-| Platform | Architectures | Artifact |
-|----------|--------------|----------|
-| Android | arm64-v8a, armeabi-v7a, x86_64, x86 | `tdlib-android` |
-| macOS | arm64, x86_64 | `tdlib-macos-jni-{arch}` |
-| Linux | x86_64, arm64 | `tdlib-linux-jni-{arch}` |
-| Windows | x64, arm64 | `tdlib-windows-jni-{arch}` |
+| Platform | Architectures | Artifact | Library |
+|----------|--------------|----------|---------|
+| Android | arm64-v8a, armeabi-v7a, x86_64, x86 | `tdlib-android` | `libtdjsonjava.so` |
+| macOS | arm64, x86_64 | `tdlib-macos-jni-{arch}` | `libtdjsonjava.dylib` |
+| Linux | x86_64, arm64 | `tdlib-linux-jni-{arch}` | `libtdjsonjava.so` |
+| Windows | x64, arm64 | `tdlib-windows-jni-{arch}` | `tdjsonjava.dll` |
+
+> **Note:** JNI builds produce the **JSONJava** interface library (`libtdjsonjava`) — a shared
+> library compiled from `td_jni.cpp` with `TD_JSON_JAVA=1`.  It contains `JNI_OnLoad` +
+> `RegisterNatives` that bind `createClientId`, `send`, `receive`, and `execute` native methods
+> to the Java class **`io.xbot.tdlib.JsonClient`** (custom package name, patched from the
+> upstream default `org.drinkless.tdlib`).
 
 ## Artifact structure
 
