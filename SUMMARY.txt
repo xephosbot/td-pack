@@ -85,8 +85,10 @@ target_link_libraries(tdjni PRIVATE ${JAVA_JVM_LIBRARY})
 - build-tdlib-linux.sh: Passes -DTD_ENABLE_JNI=OFF
 - build-tdlib-ios.sh: Passes -DTD_ENABLE_JNI=OFF
 
-All desktop JNI builds apply patches/custom-package-name.patch before configuring, which changes
-PACKAGE_NAME from "org/drinkless/tdlib" to "io/xbot/tdlib".  The patch is reverted after the build.
+All desktop JNI builds apply patches/custom-package-name.patch and patches/native-bridge-jni.patch
+before configuring.  The first patch changes PACKAGE_NAME from "org/drinkless/tdlib" to "io/xbot/tdlib".
+The second patch changes the JNI class from JsonClient to NativeBridge and renames the registered
+native methods to match the NativeBridge Kotlin declarations.  Both patches are reverted after the build.
 CMAKE_SYSTEM_NAME is set explicitly (Linux/Darwin/Windows) on all arches to force CMake into the
 if(CMAKE_CROSSCOMPILING) branch of the root CMakeLists.txt that builds the tdjni target.
 

@@ -24,9 +24,9 @@ Prebuilt [TDLib](https://github.com/tdlib/td) static libraries and headers for a
 
 > **Note:** JNI builds produce the **JSONJava** interface library (`libtdjsonjava`) — a shared
 > library compiled from `td_jni.cpp` with `TD_JSON_JAVA=1`.  It contains `JNI_OnLoad` +
-> `RegisterNatives` that bind `createClientId`, `send`, `receive`, and `execute` native methods
-> to the Java class **`io.xbot.tdlib.JsonClient`** (custom package name, patched from the
-> upstream default `org.drinkless.tdlib`).
+> `RegisterNatives` that bind `nativeCreateClientId`, `nativeSend`, `nativeReceive`, and `nativeExecute` native methods
+> to the Kotlin object **`io.xbot.tdlib.NativeBridge`** (custom package name and class, patched from the
+> upstream default `org.drinkless.tdlib.JsonClient`).
 
 ## Artifact structure
 

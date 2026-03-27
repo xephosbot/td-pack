@@ -114,9 +114,11 @@ if ($EnableJni) {
     }
     Write-Host "Using JAVA_HOME=$JavaHome for JNI headers"
 
-    # Apply package name patch before configuring.
+    # Apply patches before configuring.
     Set-Location $RootDir
     git apply patches/custom-package-name.patch
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+    git -C td apply "$RootDir/patches/native-bridge-jni.patch"
     if ($LASTEXITCODE -ne 0) { exit 1 }
     Set-Location $BuildDirName
 
@@ -162,6 +164,7 @@ if ($LASTEXITCODE -ne 0) {
     if ($EnableJni) {
         Set-Location $RootDir
         git checkout -- CMakeLists.txt
+        git -C td checkout -- example/java/td_jni.cpp
     }
     exit 1
 }
@@ -173,6 +176,7 @@ if ($EnableJni) {
     $buildResult = $LASTEXITCODE
     Set-Location $RootDir
     git checkout -- CMakeLists.txt
+    git -C td checkout -- example/java/td_jni.cpp
     if ($buildResult -ne 0) { exit 1 }
 } else {
     Write-Host "Building tdjson_static for Windows $Arch..."
