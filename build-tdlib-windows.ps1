@@ -72,11 +72,16 @@ if (Test-Path $InstallDir) {
 
 Write-Host "Building TDLib for Windows $Arch (JNI: $EnableJni)..."
 
-# For ARM64 cross-compilation: generate source files natively on x64 first,
-# because the code-generation tools (generate_mime_types_gperf, tl-parser)
-# are compiled as ARM64 and cannot run on the x64 host (exit code 216).
+# For ARM64 cross-compilation (both static and JNI): generate source files
+# natively on x64 first, because the code-generation tools
+# (generate_mime_types_gperf, tl-parser) are compiled as ARM64 and cannot run
+# on the x64 host (exit code 216).
+#
+# For x64 JNI builds: the JNI path always sets -DCMAKE_SYSTEM_NAME=Windows,
+# which triggers CMAKE_CROSSCOMPILING=TRUE and skips source generation.
+# We must run a native prepare_cross_compiling build first.
 $NativeBuildDir = $null
-if ($Arch -eq "arm64") {
+if ($Arch -eq "arm64" -or $EnableJni) {
     Write-Host "Generating TDLib auto files natively (x64)..."
     $NativeBuildDir = "build-tdlib-native-x64"
     if (Test-Path $NativeBuildDir) {

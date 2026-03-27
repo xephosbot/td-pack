@@ -23,19 +23,21 @@ if [ ! -d "$OPENSSL_INSTALL_DIR" ]; then
   exit 1
 fi
 
-if [ "$ARCH" = "arm64" ]; then
-    echo "Generating TDLib auto files..."
+# Generate TDLib auto files (mime_type_to_extension.cpp, tl schemas, etc.).
+# The JNI build always sets CMAKE_SYSTEM_NAME explicitly, which triggers
+# CMAKE_CROSSCOMPILING=TRUE and skips source generation.  We must run a
+# native prepare_cross_compiling build first so the generated sources exist.
+echo "Generating TDLib auto files..."
 
-    HOST_BUILD_DIR="build-tdlib-native-jni"
-    rm -rf "$HOST_BUILD_DIR"
-    mkdir "$HOST_BUILD_DIR"
-    cd "$HOST_BUILD_DIR" || exit 1
+HOST_BUILD_DIR="build-tdlib-native-jni"
+rm -rf "$HOST_BUILD_DIR"
+mkdir "$HOST_BUILD_DIR"
+cd "$HOST_BUILD_DIR" || exit 1
 
-    cmake "$TD_SOURCE_DIR"
-    cmake --build . --target prepare_cross_compiling -j"$(nproc)" || exit 1
+cmake "$TD_SOURCE_DIR"
+cmake --build . --target prepare_cross_compiling -j"$(nproc)" || exit 1
 
-    cd "$ROOT_DIR" || exit 1
-fi
+cd "$ROOT_DIR" || exit 1
 
 # Detect JAVA_HOME for JNI headers (arch-independent)
 if [ -z "$JAVA_HOME" ]; then
