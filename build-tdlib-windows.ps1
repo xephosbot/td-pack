@@ -47,8 +47,8 @@ foreach ($tool in @("cmake", "gperf")) {
 
 # Determine output directory and cmake platform
 switch ($Arch) {
-    "x64"   { $CmakePlatform = "x64" }
-    "arm64" { $CmakePlatform = "ARM64" }
+    "x64"   { $CmakePlatform = "x64";   $CmakeProcessor = "AMD64" }
+    "arm64" { $CmakePlatform = "ARM64"; $CmakeProcessor = "ARM64" }
     default {
         Write-Error "Unsupported architecture: $Arch"
         exit 1
@@ -103,36 +103,77 @@ New-Item -ItemType Directory -Force -Path $BuildDirName | Out-Null
 Set-Location $BuildDirName
 
 # Configure TDLib
-$cmakeArgs = @(
-    $TdSourceDir,
-    "-A", $CmakePlatform,
-    "-DCMAKE_BUILD_TYPE=Release",
-    "-DOPENSSL_ROOT_DIR=$OpensslInstallDir",
-    "-DCMAKE_INSTALL_PREFIX=$InstallDir",
-    "-DTD_ENABLE_LTO=OFF"
-)
-
-if ($Arch -eq "arm64") {
-    # Tell CMake this is a cross-compilation so it skips running generators.
-    # Setting CMAKE_SYSTEM_NAME explicitly (even to the host value) makes
-    # CMake set CMAKE_CROSSCOMPILING=TRUE.
-    $cmakeArgs += "-DCMAKE_SYSTEM_NAME=Windows"
-    $cmakeArgs += "-DCMAKE_SYSTEM_PROCESSOR=ARM64"
-}
-
 if ($EnableJni) {
-    $cmakeArgs += "-DTD_ENABLE_JNI=ON"
+    # For JNI builds use the root CMakeLists.txt (contains the tdjni target with
+    # TD_ANDROID_JSON_JAVA logic).  Force CMAKE_SYSTEM_NAME=Windows on all arches
+    # so CMake enters the if(CMAKE_CROSSCOMPILING) branch that builds libtdjsonjava.
+    $JavaHome = $env:JAVA_HOME
+    if (-not $JavaHome -or -not (Test-Path "$JavaHome\include")) {
+        Write-Error "JAVA_HOME is not set or does not contain JNI headers. Install a JDK or set JAVA_HOME."
+        exit 1
+    }
+    Write-Host "Using JAVA_HOME=$JavaHome for JNI headers"
+
+    # Apply package name patch before configuring.
+    Set-Location $RootDir
+    git apply patches/custom-package-name.patch
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+    Set-Location $BuildDirName
+
+    $cmakeArgs = @(
+        $RootDir,
+        "-A", $CmakePlatform,
+        "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "-DOPENSSL_ROOT_DIR=$OpensslInstallDir",
+        "-DTD_ANDROID_JSON_JAVA=ON",
+        "-DCMAKE_SYSTEM_NAME=Windows",
+        "-DCMAKE_SYSTEM_PROCESSOR=$CmakeProcessor",
+        # Pre-set JNI variables so find_package(JNI) does not try to link libjvm.
+        # libtdjsonjava.dll is loaded by the JVM at runtime and does not need to
+        # link against jvm.lib at build time.
+        "-DJNI_FOUND=TRUE",
+        "-DJAVA_INCLUDE_PATH=$JavaHome\include",
+        "-DJAVA_INCLUDE_PATH2=$JavaHome\include\win32",
+        "-DJAVA_JVM_LIBRARY="
+    )
 } else {
+    $cmakeArgs = @(
+        $TdSourceDir,
+        "-A", $CmakePlatform,
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DOPENSSL_ROOT_DIR=$OpensslInstallDir",
+        "-DCMAKE_INSTALL_PREFIX=$InstallDir",
+        "-DTD_ENABLE_LTO=OFF"
+    )
+
+    if ($Arch -eq "arm64") {
+        # Tell CMake this is a cross-compilation so it skips running generators.
+        # Setting CMAKE_SYSTEM_NAME explicitly (even to the host value) makes
+        # CMake set CMAKE_CROSSCOMPILING=TRUE.
+        $cmakeArgs += "-DCMAKE_SYSTEM_NAME=Windows"
+        $cmakeArgs += "-DCMAKE_SYSTEM_PROCESSOR=ARM64"
+    }
+
     $cmakeArgs += "-DTD_ENABLE_JNI=OFF"
 }
 
 cmake @cmakeArgs
-if ($LASTEXITCODE -ne 0) { exit 1 }
+if ($LASTEXITCODE -ne 0) {
+    if ($EnableJni) {
+        Set-Location $RootDir
+        git checkout -- CMakeLists.txt
+    }
+    exit 1
+}
 
 # Build
 if ($EnableJni) {
-    Write-Host "Building tdjson (shared) for Windows $Arch..."
-    cmake --build . --config Release --target tdjson -- /m
+    Write-Host "Building tdjni (tdjsonjava) for Windows $Arch..."
+    cmake --build . --config RelWithDebInfo --target tdjni -- /m
+    $buildResult = $LASTEXITCODE
+    Set-Location $RootDir
+    git checkout -- CMakeLists.txt
+    if ($buildResult -ne 0) { exit 1 }
 } else {
     Write-Host "Building tdjson_static for Windows $Arch..."
     cmake --build . --config Release --target tdjson_static -- /m
@@ -146,7 +187,7 @@ New-Item -ItemType Directory -Force -Path "$InstallDir\lib" | Out-Null
 if ($EnableJni) {
     # Copy only the JNI shared library (DLL); import/static .lib files and
     # headers are not needed -- the DLL is loaded by the JVM at runtime.
-    Get-ChildItem -Path $BuildDirName -Recurse -Filter "tdjson*.dll" | ForEach-Object {
+    Get-ChildItem -Path $BuildDirName -Recurse -Filter "tdjsonjava*.dll" | ForEach-Object {
         Copy-Item $_.FullName "$InstallDir\lib\" -Verbose
     }
 } else {
