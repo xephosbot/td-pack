@@ -66,6 +66,22 @@ fi
 
 echo "Building TDLib JNI (libtdjsonjava) for macOS $ARCH..."
 
+# Generate TDLib auto files (mime_type_to_extension.cpp, tl schemas, etc.).
+# The JNI build always sets CMAKE_SYSTEM_NAME explicitly, which triggers
+# CMAKE_CROSSCOMPILING=TRUE and skips source generation.  We must run a
+# native prepare_cross_compiling build first so the generated sources exist.
+echo "Generating TDLib auto files..."
+
+HOST_BUILD_DIR="build-tdlib-native-jni"
+rm -rf "$HOST_BUILD_DIR"
+mkdir "$HOST_BUILD_DIR"
+cd "$HOST_BUILD_DIR" || exit 1
+
+cmake "$TD_SOURCE_DIR"
+cmake --build . --target prepare_cross_compiling -j"$(sysctl -n hw.ncpu)" || exit 1
+
+cd "$ROOT_DIR" || exit 1
+
 BUILD_DIR="build-tdlib-jni-macos-$ARCH"
 INSTALL_DIR="$ROOT_DIR/tdlib/macos-jni/$ARCH"
 
@@ -126,6 +142,7 @@ mkdir -p "$INSTALL_DIR/lib"
 cp -av "$BUILD_DIR"/libtdjsonjava*.dylib "$INSTALL_DIR/lib/"
 
 rm -rf "$BUILD_DIR"
+rm -rf "$HOST_BUILD_DIR"
 
 echo "Done. TDLib macOS JNI build (libtdjsonjava) stored in tdlib/macos-jni/$ARCH"
 ls -lh "$INSTALL_DIR/lib"
