@@ -73,9 +73,13 @@ rm -rf "$BUILD_DIR"
 rm -rf "$INSTALL_DIR"
 mkdir -p "$BUILD_DIR"
 
-# Apply package name patch; revert it once the build finishes (or on error).
+# Apply patches; revert them once the build finishes (or on error).
 git -C "$ROOT_DIR" apply patches/custom-package-name.patch || exit 1
-revert_patch() { git -C "$ROOT_DIR" checkout -- CMakeLists.txt; }
+git -C "$ROOT_DIR/td" apply "$ROOT_DIR/patches/native-bridge-jni.patch" || exit 1
+revert_patch() {
+  git -C "$ROOT_DIR" checkout -- CMakeLists.txt
+  git -C "$ROOT_DIR/td" checkout -- example/java/td_jni.cpp
+}
 trap revert_patch EXIT
 
 cd "$BUILD_DIR" || exit 1
