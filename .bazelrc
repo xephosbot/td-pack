@@ -36,9 +36,5 @@ build:ios-arm64            --apple_platform_type=ios --cpu=ios_arm64
 build:ios-arm64-simulator  --apple_platform_type=ios --cpu=ios_sim_arm64
 build:ios-x86_64-simulator --apple_platform_type=ios --cpu=ios_x86_64
 
-# === Foreign CC settings ===
-# Use Ninja as the CMake generator when available (faster builds).
-build --@rules_foreign_cc//foreign_cc:cmake_generator=Ninja
-
 # === Output settings ===
 build --verbose_failures
