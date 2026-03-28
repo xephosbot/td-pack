@@ -67,6 +67,37 @@ conan install $ProjectRoot `
 
 if ($LASTEXITCODE -ne 0) { throw "Conan install failed" }
 
+# --- Step 2.5: prepare_cross_compiling for cross-compile targets ---
+# When CMAKE_CROSSCOMPILING is true, TDLib skips generating source files.
+# Build native generators first so those files exist in the source tree.
+if ($Platform -eq "windows-arm64") {
+    Write-Host ""
+    Write-Host ">>> Preparing cross-compilation (building native generators)..."
+    $NativeGenDir = Join-Path $ProjectRoot "build\native-gen"
+
+    # Install native (host) Conan dependencies
+    conan install $ProjectRoot `
+        --profile:build=default `
+        --profile:host=default `
+        --build=missing `
+        --output-folder="$NativeGenDir"
+
+    if ($LASTEXITCODE -ne 0) { throw "Native Conan install failed" }
+
+    # Configure TDLib natively
+    cmake -S (Join-Path $ProjectRoot "td") -B $NativeGenDir `
+        -G "Visual Studio 17 2022" -A x64 `
+        -DCMAKE_TOOLCHAIN_FILE="$NativeGenDir\conan_toolchain.cmake" `
+        -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+
+    if ($LASTEXITCODE -ne 0) { throw "Native CMake configure failed" }
+
+    # Build only the generators
+    cmake --build $NativeGenDir --config Release --target prepare_cross_compiling --parallel
+
+    if ($LASTEXITCODE -ne 0) { throw "prepare_cross_compiling failed" }
+}
+
 # --- Step 3: Configure CMake ---
 Write-Host ""
 Write-Host ">>> Configuring CMake..."
