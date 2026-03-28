@@ -6,5 +6,4 @@ arch=armv8
 compiler=apple-clang
 compiler.version=15
 compiler.libcxx=libc++
-build_type=RelWithDebInfo
 compiler.cppstd=17
