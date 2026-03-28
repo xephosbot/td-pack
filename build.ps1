@@ -160,11 +160,7 @@ Write-Host ">>> Building..."
 if ($Target -eq "tdlib") {
     cmake --build $BuildDir --config $BuildType --target tdjson_static --parallel
 } else {
-    if ($Platform -eq "windows-arm64") {
-        cmake --build $BuildDir --config $BuildType --target tdjni --parallel
-    } else {
-        cmake --build $BuildDir --config $BuildType --target tdjson --parallel
-    }
+    cmake --build $BuildDir --config $BuildType --target tdjni --parallel
 }
 
 if ($LASTEXITCODE -ne 0) { throw "CMake build failed" }
