@@ -17,15 +17,14 @@ bazel_dep(name = "rules_android_ndk", version = "0.1.2")
 # Apple rules — provides toolchains for iOS/macOS cross-compilation.
 bazel_dep(name = "apple_support", version = "1.17.1")
 
-# Register the Android NDK toolchain.  Requires ANDROID_NDK_HOME env var
-# to be set, or --android_ndk_path flag.
+# Android NDK toolchain.  Requires ANDROID_NDK_HOME env var to be set.
+# Toolchain is registered via --extra_toolchains in .bazelrc Android configs
+# (not globally) to avoid eager NDK repo fetch on platforms that don't need it.
 android_ndk_repository_extension = use_extension(
     "@rules_android_ndk//:extension.bzl",
     "android_ndk_repository_extension",
 )
 use_repo(android_ndk_repository_extension, "androidndk")
-
-register_toolchains("@androidndk//:all")
 
 # --- External dependencies ---
 

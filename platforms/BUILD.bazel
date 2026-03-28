@@ -15,16 +15,19 @@ Usage:
 # We add a custom constraint to differentiate them.
 constraint_setting(
     name = "ios_sdk",
+    visibility = ["//visibility:public"],
 )
 
 constraint_value(
     name = "ios_device",
     constraint_setting = ":ios_sdk",
+    visibility = ["//visibility:public"],
 )
 
 constraint_value(
     name = "ios_simulator",
     constraint_setting = ":ios_sdk",
+    visibility = ["//visibility:public"],
 )
 
 # ===========================================================================

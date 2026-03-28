@@ -20,10 +20,12 @@ build:windows-arm64 --platforms=//platforms:windows-arm64
 
 # === Android configs ===
 # Requires ANDROID_NDK_HOME or --android_ndk_path.
-build:android-arm64-v8a    --platforms=//platforms:android-arm64-v8a
-build:android-armeabi-v7a  --platforms=//platforms:android-armeabi-v7a
-build:android-x86_64       --platforms=//platforms:android-x86_64
-build:android-x86          --platforms=//platforms:android-x86
+# NDK toolchain is registered here (not in MODULE.bazel) to avoid eager
+# repo fetch on non-Android platforms (e.g. Windows symlink issues).
+build:android-arm64-v8a    --platforms=//platforms:android-arm64-v8a    --extra_toolchains=@androidndk//:all
+build:android-armeabi-v7a  --platforms=//platforms:android-armeabi-v7a  --extra_toolchains=@androidndk//:all
+build:android-x86_64       --platforms=//platforms:android-x86_64       --extra_toolchains=@androidndk//:all
+build:android-x86          --platforms=//platforms:android-x86          --extra_toolchains=@androidndk//:all
 
 # === iOS configs ===
 # Requires Xcode.  Build on macOS only.
