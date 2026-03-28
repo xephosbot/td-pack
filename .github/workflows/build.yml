@@ -17,14 +17,46 @@ permissions:
 
 jobs:
   # ──────────────────────────────────────────────────────────
+  #  Extract TDLib version from submodule (release only)
+  # ──────────────────────────────────────────────────────────
+  version:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      tdlib_version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Extract TDLib version
+        id: version
+        run: |
+          VERSION=$(grep -oP 'project\(TDLib\s+VERSION\s+\K[0-9.]+' td/CMakeLists.txt || echo "unknown")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "TDLib version: $VERSION"
+
+  # ──────────────────────────────────────────────────────────
   #  macOS (arm64 + x86_64) × (static + JNI) = 4 builds
   # ──────────────────────────────────────────────────────────
   macos:
     strategy:
       fail-fast: false
       matrix:
-        config: [macos-arm64, macos-x86_64]
-        target: [tdlib, tdlib_jni]
+        include:
+          - config: macos-arm64
+            target: tdlib
+            artifact_name: tdlib-macos-arm64
+          - config: macos-arm64
+            target: tdlib_jni
+            artifact_name: tdlib-macos-jni-arm64
+          - config: macos-x86_64
+            target: tdlib
+            artifact_name: tdlib-macos-x86_64
+          - config: macos-x86_64
+            target: tdlib_jni
+            artifact_name: tdlib-macos-jni-x86_64
     runs-on: macos-latest
     name: "macOS · ${{ matrix.config }} · ${{ matrix.target == 'tdlib_jni' && 'JNI' || 'static' }}"
     steps:
@@ -48,6 +80,25 @@ jobs:
       - name: Build TDLib
         run: ./build.sh ${{ matrix.config }} ${{ matrix.target }}
 
+      - name: Collect output libraries
+        run: |
+          mkdir -p out
+          find "build/${{ matrix.config }}-${{ matrix.target }}" \( \
+            -name "libtdjson_static.a"        \
+            -o -name "libtdjson.dylib"        \
+            -o -name "libtdjsonjava.dylib"    \
+            -o -name "libtdjni.dylib"         \
+          \) ! -name "*.debug" -exec cp -L {} out/ \;
+          ls -la out/
+
+      - name: Upload artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: out/
+          if-no-files-found: warn
+
   # ──────────────────────────────────────────────────────────
   #  Linux (x86_64 + arm64) × (static + JNI) = 4 builds
   # ──────────────────────────────────────────────────────────
@@ -55,13 +106,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [linux-x86_64, linux-arm64]
-        target: [tdlib, tdlib_jni]
         include:
           - config: linux-x86_64
+            target: tdlib
             runner: ubuntu-latest
+            artifact_name: tdlib-linux-x86_64
+          - config: linux-x86_64
+            target: tdlib_jni
+            runner: ubuntu-latest
+            artifact_name: tdlib-linux-jni-x86_64
           - config: linux-arm64
+            target: tdlib
             runner: ubuntu-24.04-arm
+            artifact_name: tdlib-linux-arm64
+          - config: linux-arm64
+            target: tdlib_jni
+            runner: ubuntu-24.04-arm
+            artifact_name: tdlib-linux-jni-arm64
     runs-on: ${{ matrix.runner }}
     name: "Linux · ${{ matrix.config }} · ${{ matrix.target == 'tdlib_jni' && 'JNI' || 'static' }}"
     steps:
@@ -83,6 +144,26 @@ jobs:
       - name: Build TDLib
         run: ./build.sh ${{ matrix.config }} ${{ matrix.target }}
 
+      - name: Collect output libraries
+        run: |
+          mkdir -p out
+          find "build/${{ matrix.config }}-${{ matrix.target }}" \( \
+            -name "libtdjson_static.a"        \
+            -o -name "libtdjson.so"           \
+            -o -name "libtdjson.so.*"         \
+            -o -name "libtdjsonjava.so"       \
+            -o -name "libtdjni.so"            \
+          \) ! -name "*.debug" -exec cp -L {} out/ \;
+          ls -la out/
+
+      - name: Upload artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: out/
+          if-no-files-found: warn
+
   # ──────────────────────────────────────────────────────────
   #  Windows (x64 + arm64) × (static + JNI) = 4 builds
   #  arm64 is cross-compiled from x64.
@@ -91,8 +172,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [windows-x64, windows-arm64]
-        target: [tdlib, tdlib_jni]
+        include:
+          - config: windows-x64
+            target: tdlib
+            artifact_name: tdlib-windows-x64
+          - config: windows-x64
+            target: tdlib_jni
+            artifact_name: tdlib-windows-jni-x64
+          - config: windows-arm64
+            target: tdlib
+            artifact_name: tdlib-windows-arm64
+          - config: windows-arm64
+            target: tdlib_jni
+            artifact_name: tdlib-windows-jni-arm64
     runs-on: windows-latest
     name: "Windows · ${{ matrix.config }} · ${{ matrix.target == 'tdlib_jni' && 'JNI' || 'static' }}"
     steps:
@@ -111,6 +203,30 @@ jobs:
 
       - name: Build TDLib
         run: .\build.ps1 -Platform ${{ matrix.config }} -Target ${{ matrix.target }}
+
+      - name: Collect output libraries
+        shell: pwsh
+        run: |
+          $BuildDir = "build\${{ matrix.config }}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force out | Out-Null
+          $patterns = @(
+            "tdjson_static.lib",
+            "tdjson.dll",      "tdjson.lib",
+            "tdjsonjava.dll",  "tdjsonjava.lib",
+            "tdjni.dll",       "tdjni.lib"
+          )
+          Get-ChildItem $BuildDir -Recurse |
+            Where-Object { $patterns -contains $_.Name -and $_.FullName -notmatch '\\CMakeFiles\\' } |
+            ForEach-Object { Copy-Item $_.FullName out\ -Force }
+          Get-ChildItem out
+
+      - name: Upload artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: out/
+          if-no-files-found: warn
 
   # ──────────────────────────────────────────────────────────
   #  Android (4 ABIs) × JNI = 4 builds
@@ -147,6 +263,22 @@ jobs:
       - name: Build TDLib JNI
         run: ./build.sh ${{ matrix.abi }} tdlib_jni
 
+      - name: Collect output libraries
+        run: |
+          ABI="${{ matrix.abi }}"
+          mkdir -p out
+          find "build/${ABI}-tdlib_jni" -name "libtdjsonjava.so" ! -name "*.debug" \
+            -exec cp -L {} out/ \;
+          ls -la out/
+
+      - name: Upload artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-${{ matrix.abi }}
+          path: out/
+          if-no-files-found: warn
+
   # ──────────────────────────────────────────────────────────
   #  iOS (arm64 + arm64-simulator + x86_64-simulator) = 3 builds
   # ──────────────────────────────────────────────────────────
@@ -173,3 +305,149 @@ jobs:
 
       - name: Build TDLib (static)
         run: ./build.sh ${{ matrix.config }} tdlib
+
+      - name: Collect output libraries
+        run: |
+          mkdir -p out
+          find "build/${{ matrix.config }}-tdlib" -name "libtdjson_static.a" \
+            -exec cp -L {} out/ \;
+          ls -la out/
+
+      - name: Upload artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-${{ matrix.config }}
+          path: out/
+          if-no-files-found: warn
+
+  # ──────────────────────────────────────────────────────────
+  #  Release: collect all artifacts, pack archives, publish
+  # ──────────────────────────────────────────────────────────
+  release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [version, macos, linux, windows, android, ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Reorganize into release structure
+        run: |
+          mkdir -p release/tdlib
+
+          # macOS static
+          for arch in arm64 x86_64; do
+            mkdir -p release/tdlib/macos/$arch
+            cp -r artifacts/tdlib-macos-$arch/. release/tdlib/macos/$arch/ 2>/dev/null || true
+          done
+
+          # macOS JNI
+          for arch in arm64 x86_64; do
+            mkdir -p release/tdlib/macos-jni/$arch
+            cp -r artifacts/tdlib-macos-jni-$arch/. release/tdlib/macos-jni/$arch/ 2>/dev/null || true
+          done
+
+          # Linux static
+          for arch in x86_64 arm64; do
+            mkdir -p release/tdlib/linux/$arch
+            cp -r artifacts/tdlib-linux-$arch/. release/tdlib/linux/$arch/ 2>/dev/null || true
+          done
+
+          # Linux JNI
+          for arch in x86_64 arm64; do
+            mkdir -p release/tdlib/linux-jni/$arch
+            cp -r artifacts/tdlib-linux-jni-$arch/. release/tdlib/linux-jni/$arch/ 2>/dev/null || true
+          done
+
+          # Windows static
+          for arch in x64 arm64; do
+            mkdir -p release/tdlib/windows/$arch
+            cp -r artifacts/tdlib-windows-$arch/. release/tdlib/windows/$arch/ 2>/dev/null || true
+          done
+
+          # Windows JNI
+          for arch in x64 arm64; do
+            mkdir -p release/tdlib/windows-jni/$arch
+            cp -r artifacts/tdlib-windows-jni-$arch/. release/tdlib/windows-jni/$arch/ 2>/dev/null || true
+          done
+
+          # Android (per ABI)
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            mkdir -p release/tdlib/android/$abi
+            cp -r artifacts/tdlib-android-$abi/. release/tdlib/android/$abi/ 2>/dev/null || true
+          done
+
+          # iOS
+          for variant in arm64 arm64-simulator x86_64-simulator; do
+            mkdir -p release/tdlib/ios/$variant
+            cp -r artifacts/tdlib-ios-$variant/. release/tdlib/ios/$variant/ 2>/dev/null || true
+          done
+
+          echo "Release tree:"
+          find release/tdlib -type f | sort
+
+      - name: Create archives
+        run: |
+          # All-in-one
+          cd release
+          tar czf ../tdlib-all.tar.gz tdlib/
+          cd ..
+
+          # Per-platform archives
+          cd artifacts
+          for dir in tdlib-*; do
+            [ -d "$dir" ] || continue
+            tar czf "../${dir}.tar.gz" "$dir"
+            echo "Created ${dir}.tar.gz"
+          done
+          cd ..
+
+          echo "Archives:"
+          ls -lh tdlib-*.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.tdlib_version }}
+          name: TDLib ${{ needs.version.outputs.tdlib_version }}
+          body: |
+            Prebuilt TDLib libraries for version ${{ needs.version.outputs.tdlib_version }}.
+
+            ## Platforms
+
+            ### Native static libraries (for Kotlin/Native, C/C++)
+            - **iOS**: arm64, arm64-simulator, x86_64-simulator
+            - **macOS**: arm64, x86_64
+            - **Linux**: x86_64, arm64
+            - **Windows**: x64, arm64
+
+            ### JNI shared libraries (for JVM / Android)
+            - **Android**: arm64-v8a, armeabi-v7a, x86_64, x86
+            - **macOS**: arm64, x86_64
+            - **Linux**: x86_64, arm64
+            - **Windows**: x64, arm64
+
+            ## Archive structure
+
+            ```
+            tdlib/
+              android/{arm64-v8a,armeabi-v7a,x86_64,x86}/libtdjsonjava.so
+              ios/{arm64,arm64-simulator,x86_64-simulator}/libtdjson_static.a
+              macos/{arm64,x86_64}/libtdjson_static.a
+              macos-jni/{arm64,x86_64}/libtdjson*.dylib
+              linux/{x86_64,arm64}/libtdjson_static.a
+              linux-jni/{x86_64,arm64}/libtdjson*.so
+              windows/{x64,arm64}/tdjson_static.lib
+              windows-jni/{x64,arm64}/tdjson*.dll
+            ```
+          files: |
+            tdlib-all.tar.gz
+            tdlib-*.tar.gz
+          draft: false
+          prerelease: false
+          make_latest: true
