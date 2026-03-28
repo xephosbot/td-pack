@@ -123,10 +123,12 @@ if $NEEDS_PREPARE; then
     --build=missing \
     --output-folder="$NATIVE_GEN_DIR"
 
-  # Configure TDLib natively
-  cmake -S "$TD_DIR" -B "$NATIVE_GEN_DIR" \
+  # Configure via root CMakeLists.txt (not td directly) so that the Conan
+  # OpenSSL/zlib bridge code is applied — td's generate_json needs libcrypto.
+  cmake -S "$PROJECT_ROOT" -B "$NATIVE_GEN_DIR" \
     -DCMAKE_TOOLCHAIN_FILE="$NATIVE_GEN_DIR/conan_toolchain.cmake" \
-    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_BUILD_TYPE=Release \
+    -DTD_ANDROID_JSON=ON
 
   # Build only the generators (prepare_cross_compiling target)
   NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
@@ -186,7 +188,20 @@ fi
 echo ""
 echo ">>> Building..."
 NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-cmake --build "$BUILD_DIR" --parallel "$NPROC"
+
+# Build only the target we need — avoids building unnecessary benchmarks
+# and the shared tdjson library which can have link-order issues with LTO.
+if [[ "$TARGET" == "tdlib" ]]; then
+  cmake --build "$BUILD_DIR" --target tdjson_static --parallel "$NPROC"
+else
+  # JNI builds: cross-compile targets have a tdjni target in root CMakeLists.txt;
+  # non-cross-compile builds produce tdjson (shared) from td's CMakeLists.txt.
+  if $NEEDS_PREPARE; then
+    cmake --build "$BUILD_DIR" --target tdjni --parallel "$NPROC"
+  else
+    cmake --build "$BUILD_DIR" --target tdjson --parallel "$NPROC"
+  fi
+fi
 
 echo ""
 echo "═══════════════════════════════════════════════════"
