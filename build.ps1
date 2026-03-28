@@ -87,8 +87,11 @@ $CmakeArgs = @(
 )
 
 if ($Target -eq "tdlib") {
-    $CmakeArgs += "-DTD_ENABLE_JNI=OFF"
-    cmake -S $TdDir -B $BuildDir @CmakeArgs
+    # Static library build — use root CMakeLists.txt with TD_ANDROID_JSON
+    # to get the simple add_subdirectory(td) path with bridge code for
+    # Conan-provided OpenSSL/zlib
+    $CmakeArgs += @("-DTD_ANDROID_JSON=ON", "-DTD_ENABLE_JNI=OFF")
+    cmake -S $ProjectRoot -B $BuildDir @CmakeArgs
 } else {
     $CmakeArgs += @(
         "-DTD_ANDROID_JSON_JAVA=ON"
