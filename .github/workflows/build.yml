@@ -35,6 +35,7 @@ jobs:
   # ──────────────────────────────────────────────────────────
   macos:
     runs-on: macos-latest
+    name: ${{ matrix.config }}-${{ matrix.target == 'tdlib_jni' && 'jni' || 'static' }}
     strategy:
       fail-fast: false
       matrix:
@@ -87,6 +88,7 @@ jobs:
   #  Linux (x86_64 + arm64) × (static + JNI) = 4 builds
   # ──────────────────────────────────────────────────────────
   linux:
+    name: ${{ matrix.config }}-${{ matrix.target == 'tdlib_jni' && 'jni' || 'static' }}
     strategy:
       fail-fast: false
       matrix:
@@ -143,6 +145,7 @@ jobs:
   # ──────────────────────────────────────────────────────────
   windows:
     runs-on: windows-latest
+    name: ${{ matrix.config }}-${{ matrix.target == 'tdlib_jni' && 'jni' || 'static' }}
     strategy:
       fail-fast: false
       matrix:

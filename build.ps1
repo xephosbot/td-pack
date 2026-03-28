@@ -59,9 +59,17 @@ Write-Host ">>> Installing Conan dependencies..."
 $BuildDir = Join-Path $ProjectRoot "build\$Platform-$Target"
 $Profile = Join-Path $ProjectRoot "profiles\$Platform"
 
+# Determine build type: static→Release, JNI→RelWithDebInfo
+if ($Target -eq "tdlib") {
+    $BuildType = "Release"
+} else {
+    $BuildType = "RelWithDebInfo"
+}
+
 conan install $ProjectRoot `
     --profile:build=default `
     --profile:host="$Profile" `
+    "--settings:host" "build_type=$BuildType" `
     --build=missing `
     --output-folder="$BuildDir"
 
@@ -149,12 +157,12 @@ Write-Host ">>> Building..."
 # Build only the target we need — avoids building unnecessary benchmarks
 # and the shared tdjson library which can have link-order issues with LTO.
 if ($Target -eq "tdlib") {
-    cmake --build $BuildDir --config Release --target tdjson_static --parallel
+    cmake --build $BuildDir --config $BuildType --target tdjson_static --parallel
 } else {
     if ($Platform -eq "windows-arm64") {
-        cmake --build $BuildDir --config RelWithDebInfo --target tdjni --parallel
+        cmake --build $BuildDir --config $BuildType --target tdjni --parallel
     } else {
-        cmake --build $BuildDir --config RelWithDebInfo --target tdjson --parallel
+        cmake --build $BuildDir --config $BuildType --target tdjson --parallel
     }
 }
 

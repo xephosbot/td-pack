@@ -95,8 +95,19 @@ echo ""
 echo ">>> Installing Conan dependencies..."
 PROFILE="$PROJECT_ROOT/profiles/$PLATFORM"
 
+# Determine build type: static→Release, Android JNI→MinSizeRel, desktop JNI→RelWithDebInfo
+if [[ "$TARGET" == "tdlib" ]]; then
+  BUILD_TYPE="Release"
+else
+  case "$PLATFORM" in
+    android-*) BUILD_TYPE="MinSizeRel" ;;
+    *)         BUILD_TYPE="RelWithDebInfo" ;;
+  esac
+fi
+
 conan install "$PROJECT_ROOT" \
   --profile:host="$PROFILE" \
+  --settings:host build_type="$BUILD_TYPE" \
   --build=missing \
   --output-folder="$BUILD_DIR"
 
@@ -145,21 +156,15 @@ CMAKE_ARGS=(
 )
 
 if [[ "$TARGET" == "tdlib" ]]; then
-  # Static library build — Release for smallest size, LTO off for compatibility
+  # Static library build — build_type=Release set via Conan toolchain
   CMAKE_ARGS+=(
-    -DCMAKE_BUILD_TYPE=Release
     -DTD_ANDROID_JSON=ON
     -DTD_ENABLE_JNI=OFF
     -DTD_ENABLE_LTO=OFF
   )
   cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
 else
-  # JNI build — RelWithDebInfo (stripping done by CMake POST_BUILD step),
-  # Android uses MinSizeRel for smallest .so
-  case "$PLATFORM" in
-    android-*) CMAKE_ARGS+=(-DCMAKE_BUILD_TYPE=MinSizeRel) ;;
-    *)         CMAKE_ARGS+=(-DCMAKE_BUILD_TYPE=RelWithDebInfo) ;;
-  esac
+  # JNI build — build_type set via Conan toolchain (MinSizeRel for Android, RelWithDebInfo otherwise)
   CMAKE_ARGS+=(
     -DTD_ANDROID_JSON_JAVA=ON
     -DTD_ENABLE_JNI=ON
