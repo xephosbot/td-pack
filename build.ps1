@@ -84,11 +84,13 @@ if ($Platform -eq "windows-arm64") {
 
     if ($LASTEXITCODE -ne 0) { throw "Native Conan install failed" }
 
-    # Configure TDLib natively
-    cmake -S (Join-Path $ProjectRoot "td") -B $NativeGenDir `
+    # Configure via root CMakeLists.txt (not td directly) so that the Conan
+    # OpenSSL/zlib bridge code is applied -- td's generate_json needs libcrypto.
+    cmake -S $ProjectRoot -B $NativeGenDir `
         -G "Visual Studio 17 2022" -A x64 `
         -DCMAKE_TOOLCHAIN_FILE="$NativeGenDir\conan_toolchain.cmake" `
-        -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+        -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
+        -DTD_ANDROID_JSON=ON
 
     if ($LASTEXITCODE -ne 0) { throw "Native CMake configure failed" }
 
@@ -145,7 +147,18 @@ if ($LASTEXITCODE -ne 0) { throw "CMake configure failed" }
 # --- Step 4: Build ---
 Write-Host ""
 Write-Host ">>> Building..."
-cmake --build $BuildDir --config RelWithDebInfo --parallel
+
+# Build only the target we need — avoids building unnecessary benchmarks
+# and the shared tdjson library which can have link-order issues with LTO.
+if ($Target -eq "tdlib") {
+    cmake --build $BuildDir --config RelWithDebInfo --target tdjson_static --parallel
+} else {
+    if ($Platform -eq "windows-arm64") {
+        cmake --build $BuildDir --config RelWithDebInfo --target tdjni --parallel
+    } else {
+        cmake --build $BuildDir --config RelWithDebInfo --target tdjson --parallel
+    }
+}
 
 if ($LASTEXITCODE -ne 0) { throw "CMake build failed" }
 
