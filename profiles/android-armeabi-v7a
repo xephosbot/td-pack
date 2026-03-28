@@ -9,4 +9,4 @@ build_type=RelWithDebInfo
 compiler.cppstd=17
 
 [conf]
-tools.android:ndk_path={{os.env.ANDROID_NDK_HOME}}
+tools.android:ndk_path={{os.environ['ANDROID_NDK_HOME']}}
