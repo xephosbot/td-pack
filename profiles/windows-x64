@@ -3,5 +3,6 @@ os=Windows
 arch=x86_64
 compiler=msvc
 compiler.version=194
+build_type=Release
 compiler.cppstd=17
 compiler.runtime=dynamic

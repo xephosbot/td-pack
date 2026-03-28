@@ -125,6 +125,7 @@ $CmakeArgs = @(
     "-A", $VsArch
     "-DCMAKE_TOOLCHAIN_FILE=$Toolchain"
     "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW"
+    "-DCMAKE_BUILD_TYPE=$BuildType"
 )
 
 if ($Target -eq "tdlib") {

@@ -96,14 +96,7 @@ echo ">>> Installing Conan dependencies..."
 PROFILE="$PROJECT_ROOT/profiles/$PLATFORM"
 
 # Determine build type: static→Release, Android JNI→MinSizeRel, desktop JNI→RelWithDebInfo
-if [[ "$TARGET" == "tdlib" ]]; then
-  BUILD_TYPE="Release"
-else
-  case "$PLATFORM" in
-    android-*) BUILD_TYPE="MinSizeRel" ;;
-    *)         BUILD_TYPE="RelWithDebInfo" ;;
-  esac
-fi
+BUILD_TYPE="Release"
 
 conan install "$PROJECT_ROOT" \
   --profile:host="$PROFILE" \
@@ -153,6 +146,7 @@ TOOLCHAIN="$BUILD_DIR/conan_toolchain.cmake"
 CMAKE_ARGS=(
   -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
   -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
+  -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 )
 
 if [[ "$TARGET" == "tdlib" ]]; then
