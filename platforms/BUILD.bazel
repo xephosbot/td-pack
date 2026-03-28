@@ -1,0 +1,157 @@
+"""Platform definitions for cross-compilation.
+
+Usage:
+    bazel build //:tdlib --config=linux-arm64
+    bazel build //:tdlib_jni --config=macos-arm64
+    bazel build //:tdlib_jni --config=android-arm64-v8a
+    bazel build //:tdlib --config=ios-arm64
+"""
+
+# ===========================================================================
+# Custom constraint: iOS device vs simulator
+# ===========================================================================
+# Bazel's built-in constraints can't distinguish ios-arm64 (device)
+# from ios-arm64-simulator — both are os:ios + cpu:aarch64.
+# We add a custom constraint to differentiate them.
+constraint_setting(
+    name = "ios_sdk",
+)
+
+constraint_value(
+    name = "ios_device",
+    constraint_setting = ":ios_sdk",
+)
+
+constraint_value(
+    name = "ios_simulator",
+    constraint_setting = ":ios_sdk",
+)
+
+# ===========================================================================
+# Linux
+# ===========================================================================
+platform(
+    name = "linux-x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "linux-arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+# ===========================================================================
+# macOS
+# ===========================================================================
+platform(
+    name = "macos-x86_64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "macos-arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+# ===========================================================================
+# Windows
+# ===========================================================================
+platform(
+    name = "windows-x64",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "windows-arm64",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+# ===========================================================================
+# Android  (requires NDK; registered in MODULE.bazel)
+# ===========================================================================
+# Android ABIs mapped to Bazel CPU constraints:
+#   arm64-v8a   → aarch64
+#   armeabi-v7a → armv7
+#   x86_64      → x86_64
+#   x86         → x86_32
+
+platform(
+    name = "android-arm64-v8a",
+    constraint_values = [
+        "@platforms//os:android",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+platform(
+    name = "android-armeabi-v7a",
+    constraint_values = [
+        "@platforms//os:android",
+        "@platforms//cpu:armv7",
+    ],
+)
+
+platform(
+    name = "android-x86_64",
+    constraint_values = [
+        "@platforms//os:android",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "android-x86",
+    constraint_values = [
+        "@platforms//os:android",
+        "@platforms//cpu:x86_32",
+    ],
+)
+
+# ===========================================================================
+# iOS  (requires Xcode; apple_support registered in MODULE.bazel)
+# ===========================================================================
+
+platform(
+    name = "ios-arm64",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@platforms//cpu:aarch64",
+        ":ios_device",
+    ],
+)
+
+platform(
+    name = "ios-arm64-simulator",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@platforms//cpu:aarch64",
+        ":ios_simulator",
+    ],
+)
+
+platform(
+    name = "ios-x86_64-simulator",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@platforms//cpu:x86_64",
+        ":ios_simulator",
+    ],
+)

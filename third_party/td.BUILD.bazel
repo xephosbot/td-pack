@@ -1,0 +1,11 @@
+"""BUILD file overlay for the @td external repository.
+
+Provides an all_srcs filegroup so that rules_foreign_cc cmake() can
+reference the full TDLib source tree.
+"""
+
+filegroup(
+    name = "all_srcs",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
