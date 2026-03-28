@@ -67,6 +67,39 @@ conan install $ProjectRoot `
 
 if ($LASTEXITCODE -ne 0) { throw "Conan install failed" }
 
+# --- Step 2.5: prepare_cross_compiling for cross-compile targets ---
+# When CMAKE_CROSSCOMPILING is true, TDLib skips generating source files.
+# Build native generators first so those files exist in the source tree.
+if ($Platform -eq "windows-arm64") {
+    Write-Host ""
+    Write-Host ">>> Preparing cross-compilation (building native generators)..."
+    $NativeGenDir = Join-Path $ProjectRoot "build\native-gen"
+
+    # Install native (host) Conan dependencies
+    conan install $ProjectRoot `
+        --profile:build=default `
+        --profile:host=default `
+        --build=missing `
+        --output-folder="$NativeGenDir"
+
+    if ($LASTEXITCODE -ne 0) { throw "Native Conan install failed" }
+
+    # Configure via root CMakeLists.txt (not td directly) so that the Conan
+    # OpenSSL/zlib bridge code is applied -- td's generate_json needs libcrypto.
+    cmake -S $ProjectRoot -B $NativeGenDir `
+        -G "Visual Studio 17 2022" -A x64 `
+        -DCMAKE_TOOLCHAIN_FILE="$NativeGenDir\conan_toolchain.cmake" `
+        -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
+        -DTD_ANDROID_JSON=ON
+
+    if ($LASTEXITCODE -ne 0) { throw "Native CMake configure failed" }
+
+    # Build only the generators
+    cmake --build $NativeGenDir --config Release --target prepare_cross_compiling --parallel
+
+    if ($LASTEXITCODE -ne 0) { throw "prepare_cross_compiling failed" }
+}
+
 # --- Step 3: Configure CMake ---
 Write-Host ""
 Write-Host ">>> Configuring CMake..."
@@ -87,8 +120,11 @@ $CmakeArgs = @(
 )
 
 if ($Target -eq "tdlib") {
-    $CmakeArgs += "-DTD_ENABLE_JNI=OFF"
-    cmake -S $TdDir -B $BuildDir @CmakeArgs
+    # Static library build — use root CMakeLists.txt with TD_ANDROID_JSON
+    # to get the simple add_subdirectory(td) path with bridge code for
+    # Conan-provided OpenSSL/zlib
+    $CmakeArgs += @("-DTD_ANDROID_JSON=ON", "-DTD_ENABLE_JNI=OFF")
+    cmake -S $ProjectRoot -B $BuildDir @CmakeArgs
 } else {
     $CmakeArgs += @(
         "-DTD_ANDROID_JSON_JAVA=ON"
@@ -111,7 +147,18 @@ if ($LASTEXITCODE -ne 0) { throw "CMake configure failed" }
 # --- Step 4: Build ---
 Write-Host ""
 Write-Host ">>> Building..."
-cmake --build $BuildDir --config RelWithDebInfo --parallel
+
+# Build only the target we need — avoids building unnecessary benchmarks
+# and the shared tdjson library which can have link-order issues with LTO.
+if ($Target -eq "tdlib") {
+    cmake --build $BuildDir --config RelWithDebInfo --target tdjson_static --parallel
+} else {
+    if ($Platform -eq "windows-arm64") {
+        cmake --build $BuildDir --config RelWithDebInfo --target tdjni --parallel
+    } else {
+        cmake --build $BuildDir --config RelWithDebInfo --target tdjson --parallel
+    }
+}
 
 if ($LASTEXITCODE -ne 0) { throw "CMake build failed" }
 

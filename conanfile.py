@@ -1,5 +1,5 @@
 from conan import ConanFile
-from conan.tools.cmake import CMakeDeps, CMakeToolchain, cmake_layout
+from conan.tools.cmake import CMakeDeps, CMakeToolchain
 
 
 class TdPackConan(ConanFile):
@@ -28,9 +28,6 @@ class TdPackConan(ConanFile):
             self.options["openssl"].no_comp = True
             self.options["openssl"].no_engine = True
             self.options["openssl"].no_async = True
-
-    def layout(self):
-        cmake_layout(self)
 
     def generate(self):
         deps = CMakeDeps(self)
