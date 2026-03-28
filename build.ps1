@@ -150,12 +150,10 @@ Write-Host ">>> Building..."
 
 # Build only the target we need — avoids building unnecessary benchmarks
 # and the shared tdjson library which can have link-order issues with LTO.
-$IsArm64CrossCompile = ($Platform -eq "windows-arm64")
-
 if ($Target -eq "tdlib") {
     cmake --build $BuildDir --config RelWithDebInfo --target tdjson_static --parallel
 } else {
-    if ($IsArm64CrossCompile) {
+    if ($Platform -eq "windows-arm64") {
         cmake --build $BuildDir --config RelWithDebInfo --target tdjni --parallel
     } else {
         cmake --build $BuildDir --config RelWithDebInfo --target tdjson --parallel
