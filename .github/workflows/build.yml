@@ -170,6 +170,12 @@ jobs:
         run: |
           brew install gperf
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Build OpenSSL
         run: |
           chmod +x build-openssl-macos.sh
@@ -177,8 +183,8 @@ jobs:
 
       - name: Build TDLib JNI
         run: |
-          chmod +x build-tdlib-jni-macos.sh
-          ./build-tdlib-jni-macos.sh td third-party/openssl ${{ matrix.arch }}
+          chmod +x build-tdlib-macos.sh
+          ./build-tdlib-macos.sh td third-party/openssl ${{ matrix.arch }} --jni
 
       - name: Upload macOS JNI Artifacts
         uses: actions/upload-artifact@v4
@@ -281,8 +287,8 @@ jobs:
 
       - name: Build TDLib JNI
         run: |
-          chmod +x build-tdlib-jni-linux.sh
-          ./build-tdlib-jni-linux.sh td third-party/openssl ${{ matrix.arch }}
+          chmod +x build-tdlib-linux.sh
+          ./build-tdlib-linux.sh td third-party/openssl ${{ matrix.arch }} --jni
 
       - name: Upload Linux JNI Artifacts
         uses: actions/upload-artifact@v4

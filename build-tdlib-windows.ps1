@@ -119,10 +119,8 @@ if ($EnableJni) {
     }
     Write-Host "Using JAVA_HOME=$JavaHome for JNI headers"
 
-    # Apply patches before configuring.
+    # Apply JNI patch (td submodule only; package name is set via CMake option).
     Set-Location $RootDir
-    git apply patches/custom-package-name.patch
-    if ($LASTEXITCODE -ne 0) { exit 1 }
     git -C td apply "$RootDir/patches/native-bridge-jni.patch"
     if ($LASTEXITCODE -ne 0) { exit 1 }
     Set-Location $BuildDirName
@@ -133,6 +131,7 @@ if ($EnableJni) {
         "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
         "-DOPENSSL_ROOT_DIR=$OpensslInstallDir",
         "-DTD_ANDROID_JSON_JAVA=ON",
+        "-DTD_JNI_PACKAGE_NAME=io/xbot/tdlib",
         "-DCMAKE_SYSTEM_NAME=Windows",
         "-DCMAKE_SYSTEM_PROCESSOR=$CmakeProcessor",
         # Pre-set JNI variables so find_package(JNI) does not try to link libjvm.
@@ -168,7 +167,6 @@ cmake @cmakeArgs
 if ($LASTEXITCODE -ne 0) {
     if ($EnableJni) {
         Set-Location $RootDir
-        git checkout -- CMakeLists.txt
         git -C td checkout -- example/java/td_jni.cpp
     }
     exit 1
@@ -180,7 +178,6 @@ if ($EnableJni) {
     cmake --build . --config RelWithDebInfo --target tdjni -- /m
     $buildResult = $LASTEXITCODE
     Set-Location $RootDir
-    git checkout -- CMakeLists.txt
     git -C td checkout -- example/java/td_jni.cpp
     if ($buildResult -ne 0) { exit 1 }
 } else {
