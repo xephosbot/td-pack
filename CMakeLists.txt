@@ -8,26 +8,50 @@ set(TD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/td)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 
-# Conan's config-mode find_package creates imported targets (OpenSSL::Crypto,
-# OpenSSL::SSL, ZLIB::ZLIB) but may not set the legacy Find-module variables
-# (OPENSSL_INCLUDE_DIR, OPENSSL_CRYPTO_LIBRARY, ZLIB_LIBRARIES, etc.) that
-# td's CMakeLists.txt uses for linking.  Bridge them here.
+# Conan's config-mode find_package creates imported targets but may not set
+# the legacy Find-module variables (OPENSSL_INCLUDE_DIR, OPENSSL_CRYPTO_LIBRARY,
+# ZLIB_LIBRARIES, etc.) that td's CMakeLists.txt uses for linking.
+# Conan 2 CMakeDeps may name targets as openssl::crypto (lowercase) or
+# OpenSSL::Crypto (capitalized) depending on recipe configuration.
+# Bridge all variants here.
+
+# --- OpenSSL include directory ---
 if (NOT OPENSSL_INCLUDE_DIR)
   if (DEFINED OpenSSL_INCLUDE_DIRS)
     set(OPENSSL_INCLUDE_DIR "${OpenSSL_INCLUDE_DIRS}")
-  elseif (TARGET OpenSSL::Crypto)
-    get_target_property(_ossl_inc OpenSSL::Crypto INTERFACE_INCLUDE_DIRECTORIES)
-    if (_ossl_inc)
-      set(OPENSSL_INCLUDE_DIR "${_ossl_inc}")
-    endif()
+  else()
+    foreach(_t openssl::crypto openssl::openssl OpenSSL::Crypto OpenSSL::OpenSSL)
+      if (TARGET ${_t})
+        get_target_property(_ossl_inc ${_t} INTERFACE_INCLUDE_DIRECTORIES)
+        if (_ossl_inc)
+          set(OPENSSL_INCLUDE_DIR "${_ossl_inc}")
+          break()
+        endif()
+      endif()
+    endforeach()
   endif()
 endif()
-if (NOT OPENSSL_CRYPTO_LIBRARY AND TARGET OpenSSL::Crypto)
-  set(OPENSSL_CRYPTO_LIBRARY OpenSSL::Crypto)
+
+# --- OpenSSL crypto library ---
+if (NOT OPENSSL_CRYPTO_LIBRARY)
+  foreach(_t openssl::crypto OpenSSL::Crypto)
+    if (TARGET ${_t})
+      set(OPENSSL_CRYPTO_LIBRARY ${_t})
+      break()
+    endif()
+  endforeach()
 endif()
-if (NOT OPENSSL_SSL_LIBRARY AND TARGET OpenSSL::SSL)
-  set(OPENSSL_SSL_LIBRARY OpenSSL::SSL)
+
+# --- OpenSSL ssl library ---
+if (NOT OPENSSL_SSL_LIBRARY)
+  foreach(_t openssl::ssl OpenSSL::SSL)
+    if (TARGET ${_t})
+      set(OPENSSL_SSL_LIBRARY ${_t})
+      break()
+    endif()
+  endforeach()
 endif()
+
 if (NOT OPENSSL_LIBRARIES)
   if (DEFINED OpenSSL_LIBRARIES)
     set(OPENSSL_LIBRARIES "${OpenSSL_LIBRARIES}")
@@ -35,6 +59,13 @@ if (NOT OPENSSL_LIBRARIES)
     set(OPENSSL_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY})
   endif()
 endif()
+
+# Ensure OPENSSL_FOUND is set (Conan config-mode sets OpenSSL_FOUND)
+if (NOT DEFINED OPENSSL_FOUND AND DEFINED OpenSSL_FOUND)
+  set(OPENSSL_FOUND ${OpenSSL_FOUND})
+endif()
+
+# --- ZLIB ---
 if (NOT ZLIB_INCLUDE_DIR)
   if (DEFINED ZLIB_INCLUDE_DIRS)
     set(ZLIB_INCLUDE_DIR "${ZLIB_INCLUDE_DIRS}")
@@ -57,7 +88,7 @@ if (TD_ANDROID_JSON)
   if (TD_PACK_LTO)
     if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
       string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto -Os")
-    else()
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto=thin -Oz")
     endif()
   endif()
