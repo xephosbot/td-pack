@@ -28,6 +28,8 @@ cmake(
     name = "tdlib",
     build_args = [
         "--parallel",
+        "--host_tool_path=make=/usr/bin/make",
+        "--host_tool_path=cmake=/opt/homebrew/bin/cmake",
     ],
     cache_entries = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
@@ -102,6 +104,8 @@ cmake(
     name = "tdlib_jni",
     build_args = [
         "--parallel",
+        "--host_tool_path=make=/usr/bin/make",
+        "--host_tool_path=cmake=/opt/homebrew/bin/cmake",
     ],
     cache_entries = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",

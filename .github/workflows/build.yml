@@ -30,12 +30,7 @@ jobs:
       matrix:
         config: [macos-arm64, macos-x86_64]
         target: [tdlib, tdlib_jni]
-        include:
-          - config: macos-arm64
-            runner: macos-latest        # Apple Silicon
-          - config: macos-x86_64
-            runner: macos-13            # Intel
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     name: "macOS · ${{ matrix.config }} · ${{ matrix.target == 'tdlib_jni' && 'JNI' || 'static' }}"
     steps:
       - name: Checkout
@@ -44,8 +39,31 @@ jobs:
       - name: Install dependencies
         run: brew install gperf
 
+      - name: Install Rosetta (for x86_64 cross-compilation)
+        if: matrix.config == 'macos-x86_64'
+        run: |
+          sudo softwareupdate --install-rosetta --agree-to-license
+
+      - name: Debug info
+        run: |
+          uname -a
+          sysctl -n machdep.cpu.brand_string || true
+          bazel version
+          which clang
+          clang --version
+
       - name: Build TDLib
-        run: bazel build //:${{ matrix.target }} --config=${{ matrix.config }}
+        env:
+          # Force Bazel/rules_foreign_cc to use host tools for make, cmake, etc.
+          CC: clang
+          CXX: clang++
+          BAZEL_CXXOPTS: "-arch x86_64"
+          BAZEL_LINKOPTS: "-arch x86_64"
+          CFLAGS: "-arch x86_64"
+          CXXFLAGS: "-arch x86_64"
+          LDFLAGS: "-arch x86_64"
+        run: |
+          bazel build //:${{ matrix.target }} --config=${{ matrix.config }}
 
   # ──────────────────────────────────────────────────────────
   #  Linux (x86_64 + arm64) × (static + JNI) = 4 builds

@@ -40,3 +40,5 @@ build:ios-x86_64-simulator --apple_platform_type=ios --cpu=ios_x86_64
 
 # === Output settings ===
 build --verbose_failures
+build --action_env=RULES_FOREIGN_CC_HOST_TOOLS=make=/usr/bin/make:cmake=/opt/homebrew/bin/cmake
+build --action_env=RULES_FOREIGN_CC_SKIP_TOOLCHAIN_BUILD=1
