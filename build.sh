@@ -196,13 +196,7 @@ NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 if [[ "$TARGET" == "tdlib" ]]; then
   cmake --build "$BUILD_DIR" --target tdjson_static --parallel "$NPROC"
 else
-  # JNI builds: cross-compile targets have a tdjni target in root CMakeLists.txt;
-  # non-cross-compile builds produce tdjson (shared) from td's CMakeLists.txt.
-  if $NEEDS_PREPARE; then
-    cmake --build "$BUILD_DIR" --target tdjni --parallel "$NPROC"
-  else
-    cmake --build "$BUILD_DIR" --target tdjson --parallel "$NPROC"
-  fi
+  cmake --build "$BUILD_DIR" --target tdjni --parallel "$NPROC"
 fi
 
 # --- Step 5: Collect output ---

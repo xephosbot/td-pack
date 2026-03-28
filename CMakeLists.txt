@@ -158,6 +158,26 @@ else()
   add_subdirectory(${TD_DIR} td)
 
   if (TD_ANDROID_JSON_JAVA)
+    # Desktop JNI: build a tdjni shared library just like the cross-compile path
+    add_library(tdjni SHARED "${TD_DIR}/example/java/td_jni.cpp")
+    target_include_directories(tdjni SYSTEM PRIVATE ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
+    target_link_libraries(tdjni PRIVATE Td::TdJsonStatic Td::TdStatic)
+    target_compile_definitions(tdjni PRIVATE TD_JSON_JAVA=1)
+    set_target_properties(tdjni PROPERTIES OUTPUT_NAME "tdjsonjava")
+    target_compile_definitions(tdjni PRIVATE PACKAGE_NAME="${TD_JNI_PACKAGE_NAME}")
+
+    if (NOT WIN32)
+      if (APPLE)
+        add_custom_command(TARGET tdjni POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E rename $<TARGET_FILE:tdjni> $<TARGET_FILE:tdjni>.debug
+          COMMAND ${CMAKE_STRIP} -S -x $<TARGET_FILE:tdjni>.debug -o $<TARGET_FILE:tdjni>)
+      else()
+        add_custom_command(TARGET tdjni POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E rename $<TARGET_FILE:tdjni> $<TARGET_FILE:tdjni>.debug
+          COMMAND ${CMAKE_STRIP} --strip-debug --strip-unneeded $<TARGET_FILE:tdjni>.debug -o $<TARGET_FILE:tdjni>)
+      endif()
+    endif()
+
     return()
   endif()
 
