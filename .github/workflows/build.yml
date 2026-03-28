@@ -22,10 +22,46 @@ permissions:
 
 jobs:
   # ──────────────────────────────────────────────────────────
-  #  Linux (x86_64) — native build
+  #  macOS (arm64 + x86_64) × (static + JNI) = 4 builds
   # ──────────────────────────────────────────────────────────
-  linux-x86_64:
-    runs-on: ubuntu-latest
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: macos-arm64
+            runner: macos-latest        # Apple Silicon
+          - config: macos-x86_64
+            runner: macos-13            # Intel
+    runs-on: ${{ matrix.runner }}
+    name: macOS (${{ matrix.config }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install gperf
+
+      - name: Build TDLib (static)
+        run: bazel build //:tdlib --config=${{ matrix.config }}
+
+      - name: Build TDLib (JNI)
+        run: bazel build //:tdlib_jni --config=${{ matrix.config }}
+
+  # ──────────────────────────────────────────────────────────
+  #  Linux (x86_64 + arm64) × (static + JNI) = 4 builds
+  # ──────────────────────────────────────────────────────────
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: linux-x86_64
+            runner: ubuntu-latest
+          - config: linux-arm64
+            runner: ubuntu-24.04-arm    # GitHub ARM64 runner
+    runs-on: ${{ matrix.runner }}
+    name: Linux (${{ matrix.config }})
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,31 +72,39 @@ jobs:
           sudo apt-get install -y gperf
 
       - name: Build TDLib (static)
-        run: bazel build //:tdlib --config=linux-x86_64
+        run: bazel build //:tdlib --config=${{ matrix.config }}
 
       - name: Build TDLib (JNI)
-        run: bazel build //:tdlib_jni --config=linux-x86_64
+        run: bazel build //:tdlib_jni --config=${{ matrix.config }}
 
   # ──────────────────────────────────────────────────────────
-  #  macOS (arm64) — native build
+  #  Windows (x64 + arm64) × (static + JNI) = 4 builds
+  #  arm64 is cross-compiled from x64.
   # ──────────────────────────────────────────────────────────
-  macos-arm64:
-    runs-on: macos-latest
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: windows-x64
+          - config: windows-arm64
+    runs-on: windows-latest
+    name: Windows (${{ matrix.config }})
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: brew install gperf
+        run: choco install gperf -y
 
       - name: Build TDLib (static)
-        run: bazel build //:tdlib --config=macos-arm64
+        run: bazel build //:tdlib --config=${{ matrix.config }}
 
       - name: Build TDLib (JNI)
-        run: bazel build //:tdlib_jni --config=macos-arm64
+        run: bazel build //:tdlib_jni --config=${{ matrix.config }}
 
   # ──────────────────────────────────────────────────────────
-  #  Android (all ABIs) — cross-compile via NDK
+  #  Android (4 ABIs) × JNI = 4 builds
   # ──────────────────────────────────────────────────────────
   android:
     runs-on: ubuntu-latest
@@ -68,6 +112,7 @@ jobs:
       fail-fast: false
       matrix:
         abi: [android-arm64-v8a, android-armeabi-v7a, android-x86_64, android-x86]
+    name: Android (${{ matrix.abi }})
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,14 +128,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gperf
 
-      - name: Build TDLib JNI (${{ matrix.abi }})
+      - name: Build TDLib JNI
         run: bazel build //:tdlib_jni --config=${{ matrix.abi }}
 
   # ──────────────────────────────────────────────────────────
-  #  iOS (arm64 device) — cross-compile via Xcode
+  #  iOS (arm64 + arm64-simulator + x86_64-simulator) = 3 builds
   # ──────────────────────────────────────────────────────────
-  ios-arm64:
+  ios:
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [ios-arm64, ios-arm64-simulator, ios-x86_64-simulator]
+    name: iOS (${{ matrix.config }})
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -98,5 +148,5 @@ jobs:
       - name: Install dependencies
         run: brew install gperf
 
-      - name: Build TDLib (static, iOS arm64)
-        run: bazel build //:tdlib --config=ios-arm64
+      - name: Build TDLib (static)
+        run: bazel build //:tdlib --config=${{ matrix.config }}
