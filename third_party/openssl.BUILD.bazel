@@ -118,6 +118,16 @@ config_setting(
     constraint_values = [
         "@platforms//os:ios",
         "@platforms//cpu:aarch64",
+        "//platforms:ios_device",
+    ],
+)
+
+config_setting(
+    name = "ios_sim_arm64",
+    constraint_values = [
+        "@platforms//os:ios",
+        "@platforms//cpu:aarch64",
+        "//platforms:ios_simulator",
     ],
 )
 
@@ -151,6 +161,14 @@ configure_make(
         # iOS — built with Xcode clang via apple_support toolchain.
         ":ios_arm64": [
             "ios64-cross",
+            "no-dso",
+            "no-engine",
+            "no-comp",
+            "no-hw",
+            "no-async",
+        ],
+        ":ios_sim_arm64": [
+            "iossimulator-xcrun",
             "no-dso",
             "no-engine",
             "no-comp",
