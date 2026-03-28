@@ -27,14 +27,14 @@ if [ ! -d "$OPENSSL_INSTALL_DIR" ]; then
   exit 1
 fi
 
-# ── prepare_cross_compiling (arm64 static always needs it, JNI always needs it) ──
-HOST_BUILD_DIR=""
+# ── Generate source files natively (arm64 cross-compile and JNI both need it) ──
+NATIVE_BUILD_DIR=""
 if [ "$ARCH" = "arm64" ] || [ "$ENABLE_JNI" = true ]; then
     echo "Generating TDLib auto files..."
-    HOST_BUILD_DIR="build-tdlib-native-jni"
-    rm -rf "$HOST_BUILD_DIR"
-    mkdir "$HOST_BUILD_DIR"
-    cd "$HOST_BUILD_DIR" || exit 1
+    NATIVE_BUILD_DIR="build-tdlib-native"
+    rm -rf "$NATIVE_BUILD_DIR"
+    mkdir "$NATIVE_BUILD_DIR"
+    cd "$NATIVE_BUILD_DIR" || exit 1
 
     cmake "$TD_SOURCE_DIR"
     cmake --build . --target prepare_cross_compiling -j"$(nproc)" || exit 1
@@ -188,7 +188,7 @@ else
 fi
 
 rm -rf "$BUILD_DIR"
-[ -n "$HOST_BUILD_DIR" ] && rm -rf "$HOST_BUILD_DIR"
+[ -n "$NATIVE_BUILD_DIR" ] && rm -rf "$NATIVE_BUILD_DIR"
 
 echo "Done! TDLib Linux build stored in tdlib/$OUTPUT_SUBDIR/$ARCH"
 ls -lh "$INSTALL_DIR/lib/"

@@ -49,11 +49,10 @@ fi
 if [ "$ENABLE_JNI" = true ]; then
   # Detect JAVA_HOME for JNI headers (arch-independent)
   if [ -z "$JAVA_HOME" ]; then
-      if command -v javac &> /dev/null; then
-          JAVA_HOME=$(dirname "$(dirname "$(readlink -f "$(which javac)")")")
-      fi
-      if [ -z "$JAVA_HOME" ]; then
-          JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || true)
+      # Try macOS-specific java_home utility first
+      JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || true)
+      if [ -z "$JAVA_HOME" ] && command -v javac &> /dev/null; then
+          JAVA_HOME=$(dirname "$(dirname "$(command -v javac)")")
       fi
   fi
   if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME/include" ]; then
