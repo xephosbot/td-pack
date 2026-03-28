@@ -122,7 +122,12 @@ if (CMAKE_CROSSCOMPILING)
   target_include_directories(tdjni SYSTEM PRIVATE ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
 
   if (TD_ANDROID_JSON_JAVA)
-    target_link_libraries(tdjni PRIVATE Td::TdJsonStatic)
+    # Td::TdJsonStatic provides the JSON API layer (tdjson_static → tdjson_private).
+    # Td::TdStatic provides tdclient → tdapi (PUBLIC interface), which includes
+    # tl_jni_object.cpp with td::jni::* helpers required by td_jni.cpp.
+    # Without Td::TdStatic the jni helpers are missing from the link because
+    # tdapi is only reachable via a PRIVATE chain through Td::TdJsonStatic.
+    target_link_libraries(tdjni PRIVATE Td::TdJsonStatic Td::TdStatic)
     target_compile_definitions(tdjni PRIVATE TD_JSON_JAVA=1)
     set_target_properties(tdjni PROPERTIES OUTPUT_NAME "tdjsonjava")
   else()
