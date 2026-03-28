@@ -100,15 +100,9 @@ configure_make(
             "libcrypto.a",
         ],
     }),
-    targets = select({
-        "@platforms//os:windows": [
-            "",
-            "install_sw",
-        ],
-        "//conditions:default": [
-            "",
-            "install_sw",
-        ],
-    }),
+    targets = [
+        "",
+        "install_sw",
+    ],
     visibility = ["//visibility:public"],
 )
