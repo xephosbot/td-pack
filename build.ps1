@@ -162,7 +162,47 @@ if ($Target -eq "tdlib") {
 
 if ($LASTEXITCODE -ne 0) { throw "CMake build failed" }
 
+# --- Step 5: Collect output ---
+Write-Host ""
+Write-Host ">>> Collecting output..."
+
+$WinArch = $Platform -replace '^windows-', ''
+$TdDir = Join-Path $ProjectRoot "td"
+
+if ($Target -eq "tdlib_jni") {
+    $OutDir = Join-Path $ProjectRoot "tdlib\windows-jni\$WinArch"
+} else {
+    $OutDir = Join-Path $ProjectRoot "tdlib\windows\$WinArch"
+}
+
+if (Test-Path $OutDir) { Remove-Item -Recurse -Force $OutDir }
+
+if ($Target -eq "tdlib") {
+    # Static build: all .lib libraries + headers
+    New-Item -ItemType Directory -Force "$OutDir\lib" | Out-Null
+    New-Item -ItemType Directory -Force "$OutDir\include\td\telegram" | Out-Null
+
+    Get-ChildItem $BuildDir -Recurse -Filter "*.lib" |
+        Where-Object { $_.FullName -notmatch '\\CMakeFiles\\' } |
+        ForEach-Object { Copy-Item $_.FullName "$OutDir\lib\" -Force -Verbose }
+
+    $tdjsonExport = Get-ChildItem $BuildDir -Recurse -Filter "tdjson_export.h" | Select-Object -First 1
+    if ($tdjsonExport) {
+        Copy-Item $tdjsonExport.FullName "$OutDir\include\td\telegram\" -Verbose
+    }
+    Copy-Item "$TdDir\td\telegram\td_json_client.h" "$OutDir\include\" -Verbose
+    Copy-Item "$TdDir\td\telegram\td_log.h" "$OutDir\include\" -Verbose
+} else {
+    # JNI build: shared library only
+    New-Item -ItemType Directory -Force "$OutDir\lib" | Out-Null
+
+    Get-ChildItem $BuildDir -Recurse -Filter "tdjsonjava*.dll" |
+        Where-Object { $_.FullName -notmatch '\\CMakeFiles\\' } |
+        ForEach-Object { Copy-Item $_.FullName "$OutDir\lib\" -Force -Verbose }
+}
+
 Write-Host ""
 Write-Host "======================================================="
-Write-Host "  Build complete: $BuildDir"
+Write-Host "  Build complete: $OutDir"
 Write-Host "======================================================="
+Get-ChildItem "$OutDir" -Recurse | Format-Table FullName, Length

@@ -202,7 +202,67 @@ else
   fi
 fi
 
+# --- Step 5: Collect output ---
+echo ""
+echo ">>> Collecting output..."
+
+# Determine output directory: tdlib/{os}/{arch} or tdlib/{os}-jni/{arch}
+case "$PLATFORM" in
+  macos-*)   _OS="macos";   _ARCH="${PLATFORM#macos-}" ;;
+  linux-*)   _OS="linux";   _ARCH="${PLATFORM#linux-}" ;;
+  android-*) _OS="android"; _ARCH="${PLATFORM#android-}" ;;
+  ios-*)     _OS="ios";     _ARCH="${PLATFORM#ios-}" ;;
+esac
+
+if [[ "$TARGET" == "tdlib_jni" && "$_OS" != "android" ]]; then
+  OUT_DIR="$PROJECT_ROOT/tdlib/${_OS}-jni/$_ARCH"
+else
+  OUT_DIR="$PROJECT_ROOT/tdlib/$_OS/$_ARCH"
+fi
+
+rm -rf "$OUT_DIR"
+
+if [[ "$TARGET" == "tdlib" ]]; then
+  # Static build: all .a libraries + headers
+  mkdir -p "$OUT_DIR/lib" "$OUT_DIR/include/td/telegram"
+
+  find "$BUILD_DIR" -name "*.a" -exec cp -v {} "$OUT_DIR/lib/" \;
+
+  find "$BUILD_DIR" -name "tdjson_export.h" -exec cp -v {} "$OUT_DIR/include/td/telegram/" \; 2>/dev/null || true
+  cp -v "$TD_DIR/td/telegram/td_json_client.h" "$OUT_DIR/include/"
+  cp -v "$TD_DIR/td/telegram/td_log.h" "$OUT_DIR/include/"
+
+  echo "Stripping static libraries..."
+  case "$_OS" in
+    macos|ios)
+      strip -S "$OUT_DIR"/lib/*.a 2>/dev/null || true
+      ;;
+    linux)
+      strip --strip-unneeded "$OUT_DIR"/lib/*.a 2>/dev/null || true
+      ;;
+  esac
+
+elif [[ "$_OS" == "android" ]]; then
+  # Android JNI: shared libraries, flat directory
+  mkdir -p "$OUT_DIR"
+  find "$BUILD_DIR" -name "libtdjsonjava.so" ! -name "*.debug" -exec cp -p {} "$OUT_DIR/" \;
+  rm -f "$OUT_DIR"/*.so.debug 2>/dev/null
+
+else
+  # Desktop JNI (macOS/Linux): shared library into lib/
+  mkdir -p "$OUT_DIR/lib"
+  case "$_OS" in
+    macos)
+      find "$BUILD_DIR" -name "libtdjsonjava*.dylib" ! -name "*.debug" -exec cp -av {} "$OUT_DIR/lib/" \;
+      ;;
+    linux)
+      find "$BUILD_DIR" -name "libtdjsonjava.so*" ! -name "*.debug" -exec cp -av {} "$OUT_DIR/lib/" \;
+      ;;
+  esac
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════════"
-echo "  Build complete: $BUILD_DIR"
+echo "  Build complete: $OUT_DIR"
 echo "═══════════════════════════════════════════════════"
+ls -lhR "$OUT_DIR/"
