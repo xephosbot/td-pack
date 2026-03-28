@@ -271,8 +271,8 @@ Available scripts:
 |----------|---------------|-------------|-----------|
 | Android | `build-openssl-android.sh` | `build-tdlib-android.sh` | _(included)_ |
 | iOS | `build-openssl-ios.sh` | `build-tdlib-ios.sh` | — |
-| macOS | `build-openssl-macos.sh` | `build-tdlib-macos.sh` | `build-tdlib-jni-macos.sh` |
-| Linux | `build-openssl-linux.sh` | `build-tdlib-linux.sh` | `build-tdlib-jni-linux.sh` |
+| macOS | `build-openssl-macos.sh` | `build-tdlib-macos.sh` | `build-tdlib-macos.sh ... --jni` |
+| Linux | `build-openssl-linux.sh` | `build-tdlib-linux.sh` | `build-tdlib-linux.sh ... --jni` |
 | Windows | `build-openssl-windows.ps1` | `build-tdlib-windows.ps1` | `build-tdlib-windows.ps1 -EnableJni` |
 
 ## License
