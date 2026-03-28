@@ -19,8 +19,9 @@ git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "g
 
 git_repository(
     name = "td",
-    # Pin to a specific commit for reproducible builds.
-    # Update this when upgrading TDLib.
+    # TODO: pin to a specific commit SHA for reproducible builds, e.g.:
+    #   commit = "abc123...",
+    # Using branch for now to track upstream during development.
     branch = "master",
     build_file = "//third_party:td.BUILD.bazel",
     patches = [
@@ -33,6 +34,7 @@ git_repository(
 # OpenSSL — built from source via rules_foreign_cc configure_make().
 git_repository(
     name = "openssl",
+    # TODO: pin to a specific commit SHA for reproducible builds.
     branch = "OpenSSL_1_1_1-stable",
     remote = "https://github.com/openssl/openssl.git",
     build_file = "//third_party:openssl.BUILD.bazel",

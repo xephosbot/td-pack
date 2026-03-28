@@ -45,9 +45,17 @@ cmake(
 # ===========================================================================
 # TDLib — JNI shared library build
 # ===========================================================================
-# Builds tdjni.so / libtdjni.dylib for Java/Android integration.
-# Uses the root CMakeLists.txt (td-pack's own) which wraps td/ and adds
-# the JNI shared library target.
+# The JNI build uses td-pack's root CMakeLists.txt which includes td/ via
+# add_subdirectory() and creates the tdjni shared library target.
+# We collect the local CMakeLists.txt + the td sources into one filegroup.
+filegroup(
+    name = "jni_srcs",
+    srcs = [
+        "CMakeLists.txt",
+    ] + glob(["patches/**"]),
+    visibility = ["//visibility:private"],
+)
+
 cmake(
     name = "tdlib_jni",
     build_args = [
@@ -58,9 +66,9 @@ cmake(
         "TD_ENABLE_JNI": "ON",
         "TD_JNI_PACKAGE_NAME": "io/xbot/tdlib",
     },
-    # For JNI builds we use td-pack's root CMakeLists.txt which wraps td/
-    # and creates the tdjni shared lib target.
-    lib_source = "@td//:all_srcs",
+    # JNI builds use td-pack's root CMakeLists.txt (which wraps td/
+    # via add_subdirectory and adds the tdjni shared library target).
+    lib_source = ":jni_srcs",
     out_shared_libs = select({
         "@platforms//os:macos": ["libtdjni.dylib"],
         "@platforms//os:windows": ["tdjni.dll"],
@@ -72,11 +80,12 @@ cmake(
     visibility = ["//visibility:public"],
     deps = [
         ":openssl",
+        "@td//:all_srcs",
     ],
 )
 
 # ===========================================================================
-# OpenSSL — built from source via cmake / configure_make
+# OpenSSL — built from source via configure_make
 # ===========================================================================
 # OpenSSL uses its own ./Configure script, not CMake.
 # We use configure_make() for this — defined in third_party/openssl.BUILD.bazel.
