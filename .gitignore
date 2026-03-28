@@ -1,5 +1,5 @@
 .idea
-
-# Bazel
-/bazel-*
-MODULE.bazel.lock
+.claude
+build/
+td/
+CMakeUserPresets.json

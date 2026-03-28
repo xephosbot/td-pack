@@ -1,20 +1,24 @@
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.19 FATAL_ERROR)
 
 project(TdAndroid VERSION 1.0 LANGUAGES CXX)
 
 set(TD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/td)
 
+# Conan-provided dependencies
+find_package(OpenSSL REQUIRED)
+find_package(ZLIB REQUIRED)
+
 option(TD_ANDROID_JSON "Use \"ON\" to build JSON interface.")
 option(TD_ANDROID_JSON_JAVA "Use \"ON\" to build Java wrapper for JSON API.")
+option(TD_PACK_LTO "Enable LTO optimization" ON)
 
 if (TD_ANDROID_JSON)
-  if (CMAKE_CROSSCOMPILING)
+  if (TD_PACK_LTO)
     if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
       string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto -Os")
     else()
       string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto=thin -Oz")
     endif()
-    list(APPEND CMAKE_FIND_ROOT_PATH "${OPENSSL_ROOT_DIR}")
   endif()
   add_subdirectory(${TD_DIR} td)
   return()
@@ -33,13 +37,14 @@ if (CMAKE_CROSSCOMPILING)
 
   include(TdSetUpCompiler)
   td_set_up_compiler()
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto -Os")
-  elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto=thin -Oz")
+  if (TD_PACK_LTO)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+      string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto -Os")
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto=thin -Oz")
+    endif()
   endif()
 
-  list(APPEND CMAKE_FIND_ROOT_PATH "${OPENSSL_ROOT_DIR}")
   add_subdirectory(${TD_DIR} td)
 
   add_library(tdjni SHARED "${TD_DIR}/example/java/td_jni.cpp")
@@ -66,6 +71,14 @@ if (CMAKE_CROSSCOMPILING)
     endif()
   endif()
 else()
+  if (TD_PACK_LTO)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+      string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto -Os")
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -flto=thin -Oz")
+    endif()
+  endif()
+
   add_subdirectory(${TD_DIR} td)
 
   if (TD_ANDROID_JSON_JAVA)

@@ -1,5 +1,0 @@
-"""Patch files applied to external repositories."""
-
-exports_files([
-    "native-bridge-jni.patch",
-])

@@ -1,0 +1,129 @@
+<#
+.SYNOPSIS
+    td-pack Windows build script.
+
+.DESCRIPTION
+    Builds TDLib for Windows platforms using Conan + CMake.
+
+.PARAMETER Platform
+    Target platform: windows-x64, windows-arm64
+
+.PARAMETER Target
+    Build target: tdlib (static libraries), tdlib_jni (JNI shared library)
+
+.EXAMPLE
+    .\build.ps1 -Platform windows-x64 -Target tdlib
+    .\build.ps1 -Platform windows-arm64 -Target tdlib_jni
+#>
+
+param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("windows-x64", "windows-arm64")]
+    [string]$Platform,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("tdlib", "tdlib_jni")]
+    [string]$Target
+)
+
+$ErrorActionPreference = "Stop"
+$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+Write-Host "======================================================="
+Write-Host "  td-pack build: $Platform / $Target"
+Write-Host "======================================================="
+
+# --- Step 1: Clone/update TDLib ---
+Write-Host ""
+Write-Host ">>> Preparing TDLib source..."
+$TdDir = Join-Path $ProjectRoot "td"
+if (-not (Test-Path $TdDir)) {
+    git clone --depth=1 https://github.com/tdlib/td.git $TdDir
+} else {
+    Write-Host "TDLib already cloned, updating..."
+    Push-Location $TdDir
+    git fetch --depth=1 origin master
+    git checkout FETCH_HEAD
+    Pop-Location
+}
+
+# Apply JNI patch
+$PatchFile = Join-Path $ProjectRoot "patches\native-bridge-jni.patch"
+if (Test-Path $PatchFile) {
+    Push-Location $TdDir
+    $checkResult = git apply --check $PatchFile 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Applying JNI patch..."
+        git apply $PatchFile
+    } else {
+        Write-Host "JNI patch already applied or not applicable, skipping."
+    }
+    Pop-Location
+}
+
+# --- Step 2: Install Conan dependencies ---
+Write-Host ""
+Write-Host ">>> Installing Conan dependencies..."
+$BuildDir = Join-Path $ProjectRoot "build\$Platform-$Target"
+$Profile = Join-Path $ProjectRoot "profiles\$Platform"
+
+conan install $ProjectRoot `
+    --profile:build=default `
+    --profile:host="$Profile" `
+    --build=missing `
+    --output-folder="$BuildDir"
+
+if ($LASTEXITCODE -ne 0) { throw "Conan install failed" }
+
+# --- Step 3: Configure CMake ---
+Write-Host ""
+Write-Host ">>> Configuring CMake..."
+
+$Toolchain = Join-Path $BuildDir "conan_toolchain.cmake"
+
+# Determine VS architecture
+$VsArch = switch ($Platform) {
+    "windows-x64"   { "x64" }
+    "windows-arm64" { "ARM64" }
+}
+
+$CmakeArgs = @(
+    "-G", "Visual Studio 17 2022"
+    "-A", $VsArch
+    "-DCMAKE_TOOLCHAIN_FILE=$Toolchain"
+    "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW"
+)
+
+if ($Target -eq "tdlib") {
+    $CmakeArgs += "-DTD_ENABLE_JNI=OFF"
+    cmake -S $TdDir -B $BuildDir @CmakeArgs
+} else {
+    $CmakeArgs += @(
+        "-DTD_ANDROID_JSON_JAVA=ON"
+        "-DTD_ENABLE_JNI=ON"
+        "-DTD_JNI_PACKAGE_NAME=io/xbot/tdlib"
+    )
+
+    if ($env:JAVA_HOME) {
+        $CmakeArgs += @(
+            "-DJAVA_INCLUDE_PATH=$env:JAVA_HOME\include"
+            "-DJAVA_INCLUDE_PATH2=$env:JAVA_HOME\include\win32"
+        )
+    }
+
+    cmake -S $ProjectRoot -B $BuildDir @CmakeArgs
+}
+
+if ($LASTEXITCODE -ne 0) { throw "CMake configure failed" }
+
+# --- Step 4: Build ---
+Write-Host ""
+Write-Host ">>> Building..."
+cmake --build $BuildDir --config RelWithDebInfo --parallel
+
+if ($LASTEXITCODE -ne 0) { throw "CMake build failed" }
+
+Write-Host ""
+Write-Host "======================================================="
+Write-Host "  Build complete: $BuildDir"
+Write-Host "======================================================="

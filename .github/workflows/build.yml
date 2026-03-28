@@ -4,18 +4,13 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'MODULE.bazel'
-      - 'BUILD.bazel'
+      - 'conanfile.py'
+      - 'profiles/**'
       - 'CMakeLists.txt'
-      - '.bazelrc'
-      - '.bazelversion'
-      - 'third_party/**'
-      - 'platforms/**'
+      - 'build.sh'
+      - 'build.ps1'
       - 'patches/**'
       - '.github/workflows/build.yml'
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: read
@@ -41,29 +36,15 @@ jobs:
 
       - name: Install Rosetta (for x86_64 cross-compilation)
         if: matrix.config == 'macos-x86_64'
-        run: |
-          sudo softwareupdate --install-rosetta --agree-to-license
+        run: sudo softwareupdate --install-rosetta --agree-to-license
 
-      - name: Debug info
+      - name: Setup Conan
         run: |
-          uname -a
-          sysctl -n machdep.cpu.brand_string || true
-          bazel version
-          which clang
-          clang --version
+          pip3 install conan
+          conan profile detect --force
 
       - name: Build TDLib
-        env:
-          # Force Bazel/rules_foreign_cc to use host tools for make, cmake, etc.
-          CC: clang
-          CXX: clang++
-          BAZEL_CXXOPTS: "-arch x86_64"
-          BAZEL_LINKOPTS: "-arch x86_64"
-          CFLAGS: "-arch x86_64"
-          CXXFLAGS: "-arch x86_64"
-          LDFLAGS: "-arch x86_64"
-        run: |
-          bazel build //:${{ matrix.target }} --config=${{ matrix.config }}
+        run: ./build.sh ${{ matrix.config }} ${{ matrix.target }}
 
   # ──────────────────────────────────────────────────────────
   #  Linux (x86_64 + arm64) × (static + JNI) = 4 builds
@@ -78,7 +59,7 @@ jobs:
           - config: linux-x86_64
             runner: ubuntu-latest
           - config: linux-arm64
-            runner: ubuntu-24.04-arm    # GitHub ARM64 runner
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     name: "Linux · ${{ matrix.config }} · ${{ matrix.target == 'tdlib_jni' && 'JNI' || 'static' }}"
     steps:
@@ -90,8 +71,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gperf
 
+      - name: Setup Conan
+        run: |
+          pip3 install conan
+          conan profile detect --force
+
       - name: Build TDLib
-        run: bazel build //:${{ matrix.target }} --config=${{ matrix.config }}
+        run: ./build.sh ${{ matrix.config }} ${{ matrix.target }}
 
   # ──────────────────────────────────────────────────────────
   #  Windows (x64 + arm64) × (static + JNI) = 4 builds
@@ -112,8 +98,13 @@ jobs:
       - name: Install dependencies
         run: choco install gperf -y
 
+      - name: Setup Conan
+        run: |
+          pip install conan
+          conan profile detect --force
+
       - name: Build TDLib
-        run: bazel build //:${{ matrix.target }} --config=${{ matrix.config }}
+        run: .\build.ps1 -Platform ${{ matrix.config }} -Target ${{ matrix.target }}
 
   # ──────────────────────────────────────────────────────────
   #  Android (4 ABIs) × JNI = 4 builds
@@ -140,8 +131,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gperf
 
+      - name: Setup Conan
+        run: |
+          pip3 install conan
+          conan profile detect --force
+
       - name: Build TDLib JNI
-        run: bazel build //:tdlib_jni --config=${{ matrix.abi }}
+        run: ./build.sh ${{ matrix.abi }} tdlib_jni
 
   # ──────────────────────────────────────────────────────────
   #  iOS (arm64 + arm64-simulator + x86_64-simulator) = 3 builds
@@ -160,5 +156,10 @@ jobs:
       - name: Install dependencies
         run: brew install gperf
 
+      - name: Setup Conan
+        run: |
+          pip3 install conan
+          conan profile detect --force
+
       - name: Build TDLib (static)
-        run: bazel build //:tdlib --config=${{ matrix.config }}
+        run: ./build.sh ${{ matrix.config }} tdlib
