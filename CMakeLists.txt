@@ -125,9 +125,16 @@ if (CMAKE_CROSSCOMPILING)
     # Td::TdJsonStatic provides the JSON API layer (tdjson_static → tdjson_private).
     # Td::TdStatic provides tdclient → tdapi (PUBLIC interface), which includes
     # tl_jni_object.cpp with td::jni::* helpers required by td_jni.cpp.
-    # Without Td::TdStatic the jni helpers are missing from the link because
-    # tdapi is only reachable via a PRIVATE chain through Td::TdJsonStatic.
     target_link_libraries(tdjni PRIVATE Td::TdJsonStatic Td::TdStatic)
+    # Force-include all objects from tdapi so that td::jni::* symbols from
+    # tl_jni_object.o are available.  Without whole-archive the linker may
+    # skip that archive member when LTO defers symbol resolution.
+    if (APPLE)
+      target_link_options(tdjni PRIVATE "LINKER:-force_load,$<TARGET_FILE:tdapi>")
+    elseif (NOT WIN32)
+      target_link_options(tdjni PRIVATE
+        "LINKER:--whole-archive" "$<TARGET_FILE:tdapi>" "LINKER:--no-whole-archive")
+    endif()
     target_compile_definitions(tdjni PRIVATE TD_JSON_JAVA=1)
     set_target_properties(tdjni PROPERTIES OUTPUT_NAME "tdjsonjava")
   else()
@@ -162,6 +169,13 @@ else()
     add_library(tdjni SHARED "${TD_DIR}/example/java/td_jni.cpp")
     target_include_directories(tdjni SYSTEM PRIVATE ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
     target_link_libraries(tdjni PRIVATE Td::TdJsonStatic Td::TdStatic)
+    # Force-include all objects from tdapi (see cross-compile path comment)
+    if (APPLE)
+      target_link_options(tdjni PRIVATE "LINKER:-force_load,$<TARGET_FILE:tdapi>")
+    elseif (NOT WIN32)
+      target_link_options(tdjni PRIVATE
+        "LINKER:--whole-archive" "$<TARGET_FILE:tdapi>" "LINKER:--no-whole-archive")
+    endif()
     target_compile_definitions(tdjni PRIVATE TD_JSON_JAVA=1)
     set_target_properties(tdjni PROPERTIES OUTPUT_NAME "tdjsonjava")
     target_compile_definitions(tdjni PRIVATE PACKAGE_NAME="${TD_JNI_PACKAGE_NAME}")
