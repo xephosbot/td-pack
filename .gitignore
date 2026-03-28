@@ -1,5 +1,4 @@
 .idea
 .claude
 build/
-td/
 CMakeUserPresets.json

@@ -33,19 +33,11 @@ Write-Host "======================================================="
 Write-Host "  td-pack build: $Platform / $Target"
 Write-Host "======================================================="
 
-# --- Step 1: Clone/update TDLib ---
+# --- Step 1: Initialize submodule and apply patch ---
 Write-Host ""
 Write-Host ">>> Preparing TDLib source..."
 $TdDir = Join-Path $ProjectRoot "td"
-if (-not (Test-Path $TdDir)) {
-    git clone --depth=1 https://github.com/tdlib/td.git $TdDir
-} else {
-    Write-Host "TDLib already cloned, updating..."
-    Push-Location $TdDir
-    git fetch --depth=1 origin master
-    git checkout FETCH_HEAD
-    Pop-Location
-}
+git -C $ProjectRoot submodule update --init --depth=1 td
 
 # Apply JNI patch
 $PatchFile = Join-Path $ProjectRoot "patches\native-bridge-jni.patch"

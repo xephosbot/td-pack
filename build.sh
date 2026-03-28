@@ -71,19 +71,11 @@ echo "════════════════════════�
 echo "  td-pack build: $PLATFORM / $TARGET"
 echo "═══════════════════════════════════════════════════"
 
-# --- Step 1: Clone/update TDLib ---
+# --- Step 1: Initialize submodule and apply patch ---
 echo ""
 echo ">>> Preparing TDLib source..."
 TD_DIR="$PROJECT_ROOT/td"
-if [[ ! -d "$TD_DIR" ]]; then
-  git clone --depth=1 https://github.com/tdlib/td.git "$TD_DIR"
-else
-  echo "TDLib already cloned, updating..."
-  cd "$TD_DIR"
-  git fetch --depth=1 origin master
-  git checkout FETCH_HEAD
-  cd "$PROJECT_ROOT"
-fi
+git -C "$PROJECT_ROOT" submodule update --init --depth=1 td
 
 # Apply JNI patch (skip if already applied)
 PATCH_FILE="$PROJECT_ROOT/patches/native-bridge-jni.patch"
