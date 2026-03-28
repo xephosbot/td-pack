@@ -113,11 +113,14 @@ CMAKE_ARGS=(
 )
 
 if [[ "$TARGET" == "tdlib" ]]; then
-  # Static library build — use TDLib's own CMakeLists.txt
+  # Static library build — use root CMakeLists.txt with TD_ANDROID_JSON
+  # to get the simple add_subdirectory(td) path with bridge code for
+  # Conan-provided OpenSSL/zlib
   CMAKE_ARGS+=(
+    -DTD_ANDROID_JSON=ON
     -DTD_ENABLE_JNI=OFF
   )
-  cmake -S "$TD_DIR" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
+  cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
 else
   # JNI build — use root CMakeLists.txt
   CMAKE_ARGS+=(
