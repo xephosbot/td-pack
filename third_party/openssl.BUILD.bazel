@@ -1,0 +1,40 @@
+"""OpenSSL build rule for rules_foreign_cc.
+
+OpenSSL uses its own ./Configure script (not CMake), so we use
+configure_make() from rules_foreign_cc to build it from source.
+"""
+
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
+
+filegroup(
+    name = "all_srcs",
+    srcs = glob(["**"]),
+)
+
+configure_make(
+    name = "openssl",
+    configure_command = "Configure",
+    configure_options = [
+        "no-shared",
+        "no-tests",
+    ] + select({
+        "@platforms//os:macos": ["darwin64-arm64-cc"],
+        "@platforms//cpu:x86_64": ["linux-x86_64"],
+        "@platforms//cpu:aarch64": ["linux-aarch64"],
+        "//conditions:default": [],
+    }),
+    env = select({
+        "@platforms//os:linux": {"AR": ""},
+        "//conditions:default": {},
+    }),
+    lib_source = ":all_srcs",
+    out_static_libs = [
+        "libssl.a",
+        "libcrypto.a",
+    ],
+    targets = [
+        "",
+        "install_sw",
+    ],
+    visibility = ["//visibility:public"],
+)

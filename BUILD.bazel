@@ -1,0 +1,88 @@
+"""Root BUILD file for td-pack.
+
+Provides cmake() targets that wrap upstream TDLib and OpenSSL builds
+using rules_foreign_cc, without modifying their CMakeLists.txt.
+"""
+
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+# ===========================================================================
+# TDLib — static library build (non-JNI)
+# ===========================================================================
+# Wraps the upstream td/ CMakeLists.txt.  No modifications to the submodule
+# are needed — all configuration is passed via cache_entries.
+cmake(
+    name = "tdlib",
+    build_args = [
+        "--parallel",
+    ],
+    cache_entries = {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+    },
+    lib_source = "@td//:all_srcs",
+    out_static_libs = [
+        "libtdjson_static.a",
+        "libtdjson_private.a",
+        "libtdclient.a",
+        "libtdcore.a",
+        "libtdapi.a",
+        "libtdactor.a",
+        "libtddb.a",
+        "libtdsqlite.a",
+        "libtdnet.a",
+        "libtdutils.a",
+    ],
+    targets = [
+        "tdjson_static",
+        "tdjson_private",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":openssl",
+    ],
+)
+
+# ===========================================================================
+# TDLib — JNI shared library build
+# ===========================================================================
+# Builds tdjni.so / libtdjni.dylib for Java/Android integration.
+# Uses the root CMakeLists.txt (td-pack's own) which wraps td/ and adds
+# the JNI shared library target.
+cmake(
+    name = "tdlib_jni",
+    build_args = [
+        "--parallel",
+    ],
+    cache_entries = {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "TD_ENABLE_JNI": "ON",
+        "TD_JNI_PACKAGE_NAME": "io/xbot/tdlib",
+    },
+    # For JNI builds we use td-pack's root CMakeLists.txt which wraps td/
+    # and creates the tdjni shared lib target.
+    lib_source = "@td//:all_srcs",
+    out_shared_libs = select({
+        "@platforms//os:macos": ["libtdjni.dylib"],
+        "@platforms//os:windows": ["tdjni.dll"],
+        "//conditions:default": ["libtdjni.so"],
+    }),
+    targets = [
+        "tdjni",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":openssl",
+    ],
+)
+
+# ===========================================================================
+# OpenSSL — built from source via cmake / configure_make
+# ===========================================================================
+# OpenSSL uses its own ./Configure script, not CMake.
+# We use configure_make() for this — defined in third_party/openssl.BUILD.bazel.
+# Re-exported here for convenience.
+alias(
+    name = "openssl",
+    actual = "@openssl//:openssl",
+    visibility = ["//visibility:public"],
+)

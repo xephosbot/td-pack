@@ -1,0 +1,39 @@
+"""td-pack: Cross-platform TDLib build system using Bazel."""
+
+module(
+    name = "td-pack",
+    version = "1.0.0",
+)
+
+# --- Bazel rules ---
+
+bazel_dep(name = "rules_foreign_cc", version = "0.12.0")
+bazel_dep(name = "platforms", version = "0.0.10")
+
+# --- External dependencies ---
+
+# TDLib (Telegram Database Library) — upstream CMake project.
+# Pulled as a git_repository so we can apply patches without modifying the
+# upstream repo.  The CMake build is wrapped via rules_foreign_cc cmake().
+git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "td",
+    # Pin to a specific commit for reproducible builds.
+    # Update this when upgrading TDLib.
+    branch = "master",
+    build_file = "//third_party:td.BUILD.bazel",
+    patches = [
+        "//patches:native-bridge-jni.patch",
+    ],
+    patch_args = ["-p1"],
+    remote = "https://github.com/tdlib/td",
+)
+
+# OpenSSL — built from source via rules_foreign_cc configure_make().
+git_repository(
+    name = "openssl",
+    branch = "OpenSSL_1_1_1-stable",
+    remote = "https://github.com/openssl/openssl.git",
+    build_file = "//third_party:openssl.BUILD.bazel",
+)
