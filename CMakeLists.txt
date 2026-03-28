@@ -20,7 +20,9 @@ if (TD_ANDROID_JSON)
   return()
 endif()
 
-if (NOT TD_ANDROID_JSON_JAVA)
+if (TD_ANDROID_JSON_JAVA)
+  set(TD_ENABLE_JNI ON CACHE BOOL "Enable JNI-compatible TDLib API" FORCE)
+else()
   option(TD_ENABLE_JNI "Enable JNI-compatible TDLib API" ON)
 endif()
 
