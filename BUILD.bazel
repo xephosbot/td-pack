@@ -7,6 +7,19 @@ using rules_foreign_cc, without modifying their CMakeLists.txt.
 load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
 
 # ===========================================================================
+# Config settings for LTO flag selection
+# ===========================================================================
+config_setting(
+    name = "compiler_gcc",
+    flag_values = {"@bazel_tools//tools/cpp:compiler": "gcc"},
+)
+
+config_setting(
+    name = "compiler_clang",
+    flag_values = {"@bazel_tools//tools/cpp:compiler": "clang"},
+)
+
+# ===========================================================================
 # TDLib — static library build (non-JNI)
 # ===========================================================================
 # Wraps the upstream td/ CMakeLists.txt.  No modifications to the submodule
@@ -18,20 +31,50 @@ cmake(
     ],
     cache_entries = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "TD_ENABLE_JNI": "OFF",
+        "TD_ENABLE_LTO": "OFF",
     },
+    # LTO is applied through CMAKE_CXX_FLAGS rather than TD_ENABLE_LTO
+    # to match the compiler-specific flags used in the shell scripts:
+    #   GCC:   -flto -Os
+    #   Clang: -flto=thin -Oz
+    copts = select({
+        ":compiler_gcc": ["-flto", "-Os"],
+        ":compiler_clang": ["-flto=thin", "-Oz"],
+        "//conditions:default": [],
+    }),
+    linkopts = select({
+        ":compiler_gcc": ["-flto"],
+        ":compiler_clang": ["-flto=thin"],
+        "//conditions:default": [],
+    }),
     lib_source = "@td//:all_srcs",
-    out_static_libs = [
-        "libtdjson_static.a",
-        "libtdjson_private.a",
-        "libtdclient.a",
-        "libtdcore.a",
-        "libtdapi.a",
-        "libtdactor.a",
-        "libtddb.a",
-        "libtdsqlite.a",
-        "libtdnet.a",
-        "libtdutils.a",
-    ],
+    out_static_libs = select({
+        "@platforms//os:windows": [
+            "tdjson_static.lib",
+            "tdjson_private.lib",
+            "tdclient.lib",
+            "tdcore.lib",
+            "tdapi.lib",
+            "tdactor.lib",
+            "tddb.lib",
+            "tdsqlite.lib",
+            "tdnet.lib",
+            "tdutils.lib",
+        ],
+        "//conditions:default": [
+            "libtdjson_static.a",
+            "libtdjson_private.a",
+            "libtdclient.a",
+            "libtdcore.a",
+            "libtdapi.a",
+            "libtdactor.a",
+            "libtddb.a",
+            "libtdsqlite.a",
+            "libtdnet.a",
+            "libtdutils.a",
+        ],
+    }),
     targets = [
         "tdjson_static",
         "tdjson_private",
@@ -64,15 +107,26 @@ cmake(
     cache_entries = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "TD_ENABLE_JNI": "ON",
+        "TD_ANDROID_JSON_JAVA": "ON",
         "TD_JNI_PACKAGE_NAME": "io/xbot/tdlib",
     },
+    copts = select({
+        ":compiler_gcc": ["-flto", "-Os"],
+        ":compiler_clang": ["-flto=thin", "-Oz"],
+        "//conditions:default": [],
+    }),
+    linkopts = select({
+        ":compiler_gcc": ["-flto"],
+        ":compiler_clang": ["-flto=thin"],
+        "//conditions:default": [],
+    }),
     # JNI builds use td-pack's root CMakeLists.txt (which wraps td/
     # via add_subdirectory and adds the tdjni shared library target).
     lib_source = ":jni_srcs",
     out_shared_libs = select({
-        "@platforms//os:macos": ["libtdjni.dylib"],
-        "@platforms//os:windows": ["tdjni.dll"],
-        "//conditions:default": ["libtdjni.so"],
+        "@platforms//os:macos": ["libtdjsonjava.dylib"],
+        "@platforms//os:windows": ["tdjsonjava.dll"],
+        "//conditions:default": ["libtdjsonjava.so"],
     }),
     targets = [
         "tdjni",
