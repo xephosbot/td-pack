@@ -28,13 +28,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        config: [macos-arm64, macos-x86_64]
+        target: [tdlib, tdlib_jni]
         include:
           - config: macos-arm64
             runner: macos-latest        # Apple Silicon
           - config: macos-x86_64
             runner: macos-13            # Intel
     runs-on: ${{ matrix.runner }}
-    name: macOS (${{ matrix.config }})
+    name: "macOS · ${{ matrix.config }} · ${{ matrix.target == 'tdlib_jni' && 'JNI' || 'static' }}"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,11 +44,8 @@ jobs:
       - name: Install dependencies
         run: brew install gperf
 
-      - name: Build TDLib (static)
-        run: bazel build //:tdlib --config=${{ matrix.config }}
-
-      - name: Build TDLib (JNI)
-        run: bazel build //:tdlib_jni --config=${{ matrix.config }}
+      - name: Build TDLib
+        run: bazel build //:${{ matrix.target }} --config=${{ matrix.config }}
 
   # ──────────────────────────────────────────────────────────
   #  Linux (x86_64 + arm64) × (static + JNI) = 4 builds
@@ -55,13 +54,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        config: [linux-x86_64, linux-arm64]
+        target: [tdlib, tdlib_jni]
         include:
           - config: linux-x86_64
             runner: ubuntu-latest
           - config: linux-arm64
             runner: ubuntu-24.04-arm    # GitHub ARM64 runner
     runs-on: ${{ matrix.runner }}
-    name: Linux (${{ matrix.config }})
+    name: "Linux · ${{ matrix.config }} · ${{ matrix.target == 'tdlib_jni' && 'JNI' || 'static' }}"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,11 +72,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gperf
 
-      - name: Build TDLib (static)
-        run: bazel build //:tdlib --config=${{ matrix.config }}
-
-      - name: Build TDLib (JNI)
-        run: bazel build //:tdlib_jni --config=${{ matrix.config }}
+      - name: Build TDLib
+        run: bazel build //:${{ matrix.target }} --config=${{ matrix.config }}
 
   # ──────────────────────────────────────────────────────────
   #  Windows (x64 + arm64) × (static + JNI) = 4 builds
@@ -85,11 +83,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - config: windows-x64
-          - config: windows-arm64
+        config: [windows-x64, windows-arm64]
+        target: [tdlib, tdlib_jni]
     runs-on: windows-latest
-    name: Windows (${{ matrix.config }})
+    name: "Windows · ${{ matrix.config }} · ${{ matrix.target == 'tdlib_jni' && 'JNI' || 'static' }}"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,11 +94,8 @@ jobs:
       - name: Install dependencies
         run: choco install gperf -y
 
-      - name: Build TDLib (static)
-        run: bazel build //:tdlib --config=${{ matrix.config }}
-
-      - name: Build TDLib (JNI)
-        run: bazel build //:tdlib_jni --config=${{ matrix.config }}
+      - name: Build TDLib
+        run: bazel build //:${{ matrix.target }} --config=${{ matrix.config }}
 
   # ──────────────────────────────────────────────────────────
   #  Android (4 ABIs) × JNI = 4 builds
