@@ -96,7 +96,6 @@ echo ">>> Installing Conan dependencies..."
 PROFILE="$PROJECT_ROOT/profiles/$PLATFORM"
 
 conan install "$PROJECT_ROOT" \
-  --profile:build=default \
   --profile:host="$PROFILE" \
   --build=missing \
   --output-folder="$BUILD_DIR"
@@ -105,7 +104,7 @@ conan install "$PROJECT_ROOT" \
 echo ""
 echo ">>> Configuring CMake..."
 
-TOOLCHAIN="$BUILD_DIR/conan_toolchain.cmake"
+TOOLCHAIN="$BUILD_DIR/build/RelWithDebInfo/generators/conan_toolchain.cmake"
 CMAKE_ARGS=(
   -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
   -DCMAKE_BUILD_TYPE=RelWithDebInfo

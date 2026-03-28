@@ -8,6 +8,9 @@ set(TD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/td)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 
+set(OPENSSL_CRYPTO_LIBRARY OpenSSL::Crypto CACHE STRING "" FORCE)
+set(OPENSSL_SSL_LIBRARY OpenSSL::SSL CACHE STRING "" FORCE)
+
 option(TD_ANDROID_JSON "Use \"ON\" to build JSON interface.")
 option(TD_ANDROID_JSON_JAVA "Use \"ON\" to build Java wrapper for JSON API.")
 option(TD_PACK_LTO "Enable LTO optimization" ON)
