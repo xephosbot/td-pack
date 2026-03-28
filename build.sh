@@ -141,21 +141,25 @@ echo ">>> Configuring CMake..."
 TOOLCHAIN="$BUILD_DIR/conan_toolchain.cmake"
 CMAKE_ARGS=(
   -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo
   -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
 )
 
 if [[ "$TARGET" == "tdlib" ]]; then
-  # Static library build — use root CMakeLists.txt with TD_ANDROID_JSON
-  # to get the simple add_subdirectory(td) path with bridge code for
-  # Conan-provided OpenSSL/zlib
+  # Static library build — Release for smallest size, LTO off for compatibility
   CMAKE_ARGS+=(
+    -DCMAKE_BUILD_TYPE=Release
     -DTD_ANDROID_JSON=ON
     -DTD_ENABLE_JNI=OFF
+    -DTD_ENABLE_LTO=OFF
   )
   cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
 else
-  # JNI build — use root CMakeLists.txt
+  # JNI build — RelWithDebInfo (stripping done by CMake POST_BUILD step),
+  # Android uses MinSizeRel for smallest .so
+  case "$PLATFORM" in
+    android-*) CMAKE_ARGS+=(-DCMAKE_BUILD_TYPE=MinSizeRel) ;;
+    *)         CMAKE_ARGS+=(-DCMAKE_BUILD_TYPE=RelWithDebInfo) ;;
+  esac
   CMAKE_ARGS+=(
     -DTD_ANDROID_JSON_JAVA=ON
     -DTD_ENABLE_JNI=ON

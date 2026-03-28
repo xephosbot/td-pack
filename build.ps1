@@ -120,10 +120,8 @@ $CmakeArgs = @(
 )
 
 if ($Target -eq "tdlib") {
-    # Static library build — use root CMakeLists.txt with TD_ANDROID_JSON
-    # to get the simple add_subdirectory(td) path with bridge code for
-    # Conan-provided OpenSSL/zlib
-    $CmakeArgs += @("-DTD_ANDROID_JSON=ON", "-DTD_ENABLE_JNI=OFF")
+    # Static library build — Release for smallest size, LTO off for compatibility
+    $CmakeArgs += @("-DTD_ANDROID_JSON=ON", "-DTD_ENABLE_JNI=OFF", "-DTD_ENABLE_LTO=OFF")
     cmake -S $ProjectRoot -B $BuildDir @CmakeArgs
 } else {
     $CmakeArgs += @(
@@ -151,7 +149,7 @@ Write-Host ">>> Building..."
 # Build only the target we need — avoids building unnecessary benchmarks
 # and the shared tdjson library which can have link-order issues with LTO.
 if ($Target -eq "tdlib") {
-    cmake --build $BuildDir --config RelWithDebInfo --target tdjson_static --parallel
+    cmake --build $BuildDir --config Release --target tdjson_static --parallel
 } else {
     if ($Platform -eq "windows-arm64") {
         cmake --build $BuildDir --config RelWithDebInfo --target tdjni --parallel
