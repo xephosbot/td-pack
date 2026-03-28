@@ -47,17 +47,6 @@ if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME/include" ]; then
 fi
 echo "Using JAVA_HOME=$JAVA_HOME for JNI headers"
 
-# Find a strip tool that supports GNU-style --strip-debug / --strip-unneeded flags
-# (required by the CMakeLists.txt POST_BUILD strip step).
-CMAKE_STRIP_ARG=""
-for candidate in llvm-strip "$(brew --prefix llvm 2>/dev/null)/bin/llvm-strip"; do
-    if command -v "$candidate" &>/dev/null; then
-        CMAKE_STRIP_ARG="-DCMAKE_STRIP=$candidate"
-        echo "Using strip tool: $candidate"
-        break
-    fi
-done
-
 OPENSSL_ARCH_DIR="$OPENSSL_INSTALL_DIR/$ARCH"
 if [ ! -d "$OPENSSL_ARCH_DIR" ]; then
     echo "Error: OpenSSL for $ARCH not found in $OPENSSL_ARCH_DIR"
@@ -127,7 +116,6 @@ cmake "$ROOT_DIR" \
     -DJAVA_INCLUDE_PATH="$JAVA_HOME/include" \
     -DJAVA_INCLUDE_PATH2="$JAVA_HOME/include/darwin" \
     -DJAVA_JVM_LIBRARY="" \
-    ${CMAKE_STRIP_ARG:+"$CMAKE_STRIP_ARG"} \
     || exit 1
 
 # Build tdjni target which produces libtdjsonjava.dylib
