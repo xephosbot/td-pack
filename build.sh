@@ -108,7 +108,7 @@ conan install "$PROJECT_ROOT" \
 NEEDS_PREPARE=false
 case "$PLATFORM" in
   ios-*|android-*) NEEDS_PREPARE=true ;;
-  macos-x86_64)    NEEDS_PREPARE=true ;;   # arm64 host → x86_64 target
+  macos-x86_64)    NEEDS_PREPARE=true ;;   # CI runs on arm64; x86_64 is cross-compiled
 esac
 
 if $NEEDS_PREPARE; then

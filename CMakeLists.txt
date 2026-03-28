@@ -34,7 +34,7 @@ endif()
 
 # --- OpenSSL crypto library ---
 if (NOT OPENSSL_CRYPTO_LIBRARY)
-  foreach(_t openssl::crypto OpenSSL::Crypto)
+  foreach(_t openssl::crypto OpenSSL::Crypto openssl::openssl OpenSSL::OpenSSL)
     if (TARGET ${_t})
       set(OPENSSL_CRYPTO_LIBRARY ${_t})
       break()
@@ -44,7 +44,7 @@ endif()
 
 # --- OpenSSL ssl library ---
 if (NOT OPENSSL_SSL_LIBRARY)
-  foreach(_t openssl::ssl OpenSSL::SSL)
+  foreach(_t openssl::ssl OpenSSL::SSL openssl::openssl OpenSSL::OpenSSL)
     if (TARGET ${_t})
       set(OPENSSL_SSL_LIBRARY ${_t})
       break()
