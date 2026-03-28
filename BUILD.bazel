@@ -86,11 +86,10 @@ cmake(
 )
 
 # ===========================================================================
-# TDLib — JNI shared library build
+# TDLib — JNI shared library build (Android / Desktop JVM)
 # ===========================================================================
 # The JNI build uses td-pack's root CMakeLists.txt which includes td/ via
 # add_subdirectory() and creates the tdjni shared library target.
-# We collect the local CMakeLists.txt + the td sources into one filegroup.
 filegroup(
     name = "jni_srcs",
     srcs = [
@@ -126,6 +125,7 @@ cmake(
     out_shared_libs = select({
         "@platforms//os:macos": ["libtdjsonjava.dylib"],
         "@platforms//os:windows": ["tdjsonjava.dll"],
+        # Covers Linux and Android (.so).
         "//conditions:default": ["libtdjsonjava.so"],
     }),
     targets = [

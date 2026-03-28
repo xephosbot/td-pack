@@ -56,3 +56,45 @@ jobs:
 
       - name: Build TDLib (JNI)
         run: bazel build //:tdlib_jni --config=macos-arm64
+
+  # ──────────────────────────────────────────────────────────
+  #  Android (all ABIs) — cross-compile via NDK
+  # ──────────────────────────────────────────────────────────
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [android-arm64-v8a, android-armeabi-v7a, android-x86_64, android-x86]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+          link-to-sdk: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf
+
+      - name: Build TDLib JNI (${{ matrix.abi }})
+        run: bazel build //:tdlib_jni --config=${{ matrix.abi }}
+
+  # ──────────────────────────────────────────────────────────
+  #  iOS (arm64 device) — cross-compile via Xcode
+  # ──────────────────────────────────────────────────────────
+  ios-arm64:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install gperf
+
+      - name: Build TDLib (static, iOS arm64)
+        run: bazel build //:tdlib --config=ios-arm64

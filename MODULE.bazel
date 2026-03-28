@@ -11,6 +11,22 @@ bazel_dep(name = "rules_foreign_cc", version = "0.12.0")
 bazel_dep(name = "platforms", version = "0.0.10")
 bazel_dep(name = "zlib", version = "1.3.1.bcr.4")
 
+# Android NDK toolchain — provides C/C++ cross-compilation for Android ABIs.
+bazel_dep(name = "rules_android_ndk", version = "0.1.2")
+
+# Apple rules — provides toolchains for iOS/macOS cross-compilation.
+bazel_dep(name = "apple_support", version = "1.17.1")
+
+# Register the Android NDK toolchain.  Requires ANDROID_NDK_HOME env var
+# to be set, or --android_ndk_path flag.
+android_ndk_repository_extension = use_extension(
+    "@rules_android_ndk//:extension.bzl",
+    "android_ndk_repository_extension",
+)
+use_repo(android_ndk_repository_extension, "androidndk")
+
+register_toolchains("@androidndk//:all")
+
 # --- External dependencies ---
 
 # TDLib (Telegram Database Library) — upstream CMake project.

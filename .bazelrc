@@ -10,13 +10,31 @@ build --copt=-g
 # === Platform-specific flags ===
 # LTO is configured per-platform in BUILD rules via copts/linkopts selects.
 
-# === Convenience aliases ===
+# === Desktop convenience aliases ===
 build:linux-x86_64   --platforms=//platforms:linux-x86_64
 build:linux-arm64    --platforms=//platforms:linux-arm64
 build:macos-x86_64  --platforms=//platforms:macos-x86_64
 build:macos-arm64   --platforms=//platforms:macos-arm64
 build:windows-x64   --platforms=//platforms:windows-x64
 build:windows-arm64 --platforms=//platforms:windows-arm64
+
+# === Android configs ===
+# Requires ANDROID_NDK_HOME or --android_ndk_path.
+build:android-arm64-v8a    --platforms=//platforms:android-arm64-v8a
+build:android-armeabi-v7a  --platforms=//platforms:android-armeabi-v7a
+build:android-x86_64       --platforms=//platforms:android-x86_64
+build:android-x86          --platforms=//platforms:android-x86
+
+# === iOS configs ===
+# Requires Xcode.  Build on macOS only.
+build:ios-arm64            --platforms=//platforms:ios-arm64
+build:ios-arm64-simulator  --platforms=//platforms:ios-arm64-simulator
+build:ios-x86_64-simulator --platforms=//platforms:ios-x86_64-simulator
+
+# Apple crosstool — use the Xcode-provided toolchain for iOS/macOS.
+build:ios-arm64            --apple_platform_type=ios --cpu=ios_arm64
+build:ios-arm64-simulator  --apple_platform_type=ios --cpu=ios_sim_arm64
+build:ios-x86_64-simulator --apple_platform_type=ios --cpu=ios_x86_64
 
 # === Foreign CC settings ===
 # Use Ninja as the CMake generator when available (faster builds).
