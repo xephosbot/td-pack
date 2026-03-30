@@ -1,0 +1,13 @@
+.idea
+.claude
+build/
+CMakeUserPresets.json
+
+# TDLib submodule content (never committed — managed by git submodule)
+td/
+
+# Build outputs
+out/
+
+# OpenSSL built locally — not committed
+third_party/openssl/
