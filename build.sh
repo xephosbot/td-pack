@@ -1,19 +1,65 @@
 #!/usr/bin/env bash
+# =============================================================================
+# build.sh — TDLib cross-platform build driver
+# =============================================================================
+# Usage:
+#   ./build.sh <target> <platform>
+#
+# Targets:
+#   tdlib       — static TDLib (no JNI)
+#   tdlib_jni   — JNI shared library (libtdjni)
+#
+# Platforms:
+#   macos-arm64            macos-x86_64
+#   linux-x86_64           linux-arm64
+#   android-arm64-v8a      android-armeabi-v7a
+#   android-x86_64         android-x86
+#   ios-arm64              ios-arm64-simulator
+#   ios-x86_64-simulator
+#
+# Examples:
+#   ./build.sh tdlib macos-arm64
+#   ./build.sh tdlib_jni linux-x86_64
+#   ./build.sh tdlib_jni android-arm64-v8a
+#   ./build.sh tdlib ios-arm64
+# =============================================================================
+
 set -euo pipefail
 
-# ──────────────────────────────────────────────────────────
-#  td-pack build script
-#  Usage: ./build.sh <platform> <target>
-#
-#  Platforms: macos-arm64, macos-x86_64, linux-x86_64, linux-arm64,
-#             android-arm64-v8a, android-armeabi-v7a, android-x86_64,
-#             android-x86, ios-arm64, ios-arm64-simulator, ios-x86_64-simulator
-#
-#  Targets:  tdlib       (static libraries)
-#            tdlib_jni   (JNI shared library)
-# ──────────────────────────────────────────────────────────
+# ── Colours ───────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+info()    { echo -e "${CYAN}${BOLD}[INFO]${NC}  $*"; }
+success() { echo -e "${GREEN}${BOLD}[OK]${NC}    $*"; }
+warn()    { echo -e "${YELLOW}${BOLD}[WARN]${NC}  $*"; }
+error()   { echo -e "${RED}${BOLD}[ERROR]${NC} $*" >&2; exit 1; }
+banner()  { echo -e "\n${BOLD}${CYAN}══════════════════════════════════════════════════════${NC}"; \
+             echo -e "${BOLD}${CYAN}  $*${NC}"; \
+             echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════${NC}"; }
+
+# ── Argument validation ────────────────────────────────────────────────────────
+if [[ $# -lt 2 ]]; then
+  echo "Usage: $0 <target> <platform>"
+  echo ""
+  echo "Targets:   tdlib  tdlib_jni"
+  echo "Platforms: macos-arm64 macos-x86_64 linux-x86_64 linux-arm64"
+  echo "           android-arm64-v8a android-armeabi-v7a android-x86_64 android-x86"
+  echo "           ios-arm64 ios-arm64-simulator ios-x86_64-simulator"
+  exit 1
+fi
+
+TARGET="$1"
+PLATFORM="$2"
+
+case "$TARGET" in
+  tdlib|tdlib_jni) ;;
+  *) error "Unknown target: $TARGET. Must be 'tdlib' or 'tdlib_jni'." ;;
+esac
 
 VALID_PLATFORMS=(
   macos-arm64 macos-x86_64
@@ -22,244 +68,446 @@ VALID_PLATFORMS=(
   ios-arm64 ios-arm64-simulator ios-x86_64-simulator
 )
 
-usage() {
-  echo "Usage: $0 <platform> <target>"
-  echo ""
-  echo "Platforms: ${VALID_PLATFORMS[*]}"
-  echo "Targets:   tdlib (static), tdlib_jni (JNI shared)"
-  exit 1
-}
-
-# --- Validate arguments ---
-[[ $# -lt 2 ]] && usage
-
-PLATFORM="$1"
-TARGET="$2"
-
-# Check platform is valid
-PLATFORM_VALID=false
+platform_valid=false
 for p in "${VALID_PLATFORMS[@]}"; do
-  [[ "$p" == "$PLATFORM" ]] && PLATFORM_VALID=true && break
+  [[ "$PLATFORM" == "$p" ]] && platform_valid=true && break
 done
-$PLATFORM_VALID || { echo "Error: unknown platform '$PLATFORM'"; usage; }
+$platform_valid || error "Unknown platform: $PLATFORM"
 
-# Check target is valid
-[[ "$TARGET" == "tdlib" || "$TARGET" == "tdlib_jni" ]] || {
-  echo "Error: unknown target '$TARGET' (must be tdlib or tdlib_jni)"
-  usage
+# ── Paths ──────────────────────────────────────────────────────────────────────
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="$PROJECT_ROOT/build"
+TD_DIR="$PROJECT_ROOT/td"
+PATCH_FILE="$PROJECT_ROOT/patches/native-bridge-jni.patch"
+NATIVE_GEN_DIR="$BUILD_DIR/native-gen"
+NATIVE_GEN_DONE="$NATIVE_GEN_DIR/.done"
+
+# ── Parallelism ────────────────────────────────────────────────────────────────
+if command -v nproc &>/dev/null; then
+  NPROC=$(nproc)
+elif command -v sysctl &>/dev/null; then
+  NPROC=$(sysctl -n hw.logicalcpu)
+else
+  NPROC=4
+fi
+
+# ── Step 1: Init submodule ────────────────────────────────────────────────────
+banner "Initialising TDLib submodule"
+git -C "$PROJECT_ROOT" submodule update --init --depth=1 td
+success "Submodule ready"
+
+# ── Step 2: Apply patch (JNI targets only) ────────────────────────────────────
+apply_patch() {
+  banner "Applying native-bridge-jni patch"
+  if [[ ! -f "$PATCH_FILE" ]]; then
+    error "Patch file not found: $PATCH_FILE"
+  fi
+
+  # Check if already applied
+  if git -C "$TD_DIR" apply --check --reverse "$PATCH_FILE" 2>/dev/null; then
+    info "Patch already applied, skipping"
+    return 0
+  fi
+
+  # Verify it can be applied cleanly
+  if ! git -C "$TD_DIR" apply --check "$PATCH_FILE" 2>/dev/null; then
+    error "Patch does not apply cleanly to td/. Resolve conflicts manually."
+  fi
+
+  git -C "$TD_DIR" apply "$PATCH_FILE"
+  success "Patch applied"
 }
 
-# Enforce constraints
-case "$PLATFORM" in
-  android-*)
-    [[ "$TARGET" == "tdlib_jni" ]] || {
-      echo "Error: Android only supports tdlib_jni target"
-      exit 1
-    }
-    ;;
-  ios-*)
-    [[ "$TARGET" == "tdlib" ]] || {
-      echo "Error: iOS only supports tdlib target"
-      exit 1
-    }
-    ;;
-esac
+# ── Helper: prepare_cross_compiling (builds native code generator) ────────────
+prepare_cross_compiling() {
+  banner "Preparing cross-compilation code generator"
 
-BUILD_DIR="$PROJECT_ROOT/build/$PLATFORM-$TARGET"
+  if [[ -f "$NATIVE_GEN_DONE" ]]; then
+    info "Native code generator already built (sentinel found), skipping"
+    return 0
+  fi
 
-echo "═══════════════════════════════════════════════════"
-echo "  td-pack build: $PLATFORM / $TARGET"
-echo "═══════════════════════════════════════════════════"
+  mkdir -p "$NATIVE_GEN_DIR"
+  cmake -S "$TD_DIR" \
+        -B "$NATIVE_GEN_DIR" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DTD_ENABLE_JNI=OFF \
+        -DCMAKE_INSTALL_PREFIX="$NATIVE_GEN_DIR/install" \
+        2>&1 | sed 's/^/  /'
 
-# --- Step 1: Initialize submodule and apply patch ---
-echo ""
-echo ">>> Preparing TDLib source..."
-TD_DIR="$PROJECT_ROOT/td"
-git -C "$PROJECT_ROOT" submodule update --init --depth=1 td
+  cmake --build "$NATIVE_GEN_DIR" \
+        --target prepare_cross_compiling \
+        --config Release \
+        -j"$NPROC" \
+        2>&1 | sed 's/^/  /'
 
-# Apply JNI patch (skip if already applied)
-PATCH_FILE="$PROJECT_ROOT/patches/native-bridge-jni.patch"
-if [[ -f "$PATCH_FILE" ]]; then
-  cd "$TD_DIR"
-  if git apply --check "$PATCH_FILE" 2>/dev/null; then
-    echo "Applying JNI patch..."
-    git apply "$PATCH_FILE"
+  touch "$NATIVE_GEN_DONE"
+  success "Native code generator ready"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Platform-specific build functions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── macOS / Linux — Static ─────────────────────────────────────────────────────
+build_desktop_static() {
+  local os="$1"      # macos | linux
+  local arch="$2"    # arm64 | x86_64
+
+  local out_dir="$PROJECT_ROOT/out/${os}/${arch}"
+  local build_subdir="$BUILD_DIR/${os}-static-${arch}"
+
+  banner "Building TDLib static — ${os}/${arch}"
+
+  local extra_args=()
+
+  if [[ "$os" == "macos" ]]; then
+    local openssl_root
+    if [[ "$arch" == "arm64" ]]; then
+      openssl_root="/opt/homebrew/opt/openssl"
+    else
+      openssl_root="/usr/local/opt/openssl"
+    fi
+    [[ -d "$openssl_root" ]] || error "OpenSSL not found at $openssl_root. Install via brew."
+    extra_args+=(
+      "-DOPENSSL_ROOT_DIR=${openssl_root}"
+      "-DCMAKE_OSX_ARCHITECTURES=${arch}"
+    )
+  fi
+
+  mkdir -p "$build_subdir"
+  cmake -S "$TD_DIR" \
+        -B "$build_subdir" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$out_dir" \
+        -DTD_ENABLE_JNI=OFF \
+        -DTD_ENABLE_LTO=ON \
+        "${extra_args[@]}" \
+        2>&1 | sed 's/^/  /'
+
+  cmake --build "$build_subdir" \
+        --target install \
+        --config Release \
+        -j"$NPROC" \
+        2>&1 | sed 's/^/  /'
+
+  success "Static build complete → $out_dir"
+}
+
+# ── macOS / Linux — JNI ───────────────────────────────────────────────────────
+build_desktop_jni() {
+  local os="$1"
+  local arch="$2"
+
+  local step1_install="$BUILD_DIR/${os}-jni-step1-${arch}/install"
+  local step1_build="$BUILD_DIR/${os}-jni-step1-${arch}/build"
+  local step2_build="$BUILD_DIR/${os}-jni-step2-${arch}"
+  local out_dir="$PROJECT_ROOT/out/${os}-jni/${arch}"
+
+  banner "Building TDLib JNI — ${os}/${arch} (pass 1: TDLib)"
+
+  local extra_args=()
+
+  if [[ "$os" == "macos" ]]; then
+    local openssl_root
+    if [[ "$arch" == "arm64" ]]; then
+      openssl_root="/opt/homebrew/opt/openssl"
+    else
+      openssl_root="/usr/local/opt/openssl"
+    fi
+    [[ -d "$openssl_root" ]] || error "OpenSSL not found at $openssl_root. Install via brew."
+    extra_args+=(
+      "-DOPENSSL_ROOT_DIR=${openssl_root}"
+      "-DCMAKE_OSX_ARCHITECTURES=${arch}"
+    )
+  fi
+
+  # Determine JAVA_HOME
+  local java_home="${JAVA_HOME:-}"
+  if [[ -z "$java_home" ]]; then
+    if [[ "$os" == "macos" ]]; then
+      if [[ "$arch" == "arm64" ]]; then
+        java_home="/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home"
+      else
+        java_home="/usr/local/opt/openjdk/libexec/openjdk.jdk/Contents/Home"
+      fi
+    fi
+  fi
+
+  if [[ -n "$java_home" ]]; then
+    [[ -d "$java_home" ]] || error "JAVA_HOME not found: $java_home"
+    export JAVA_HOME="$java_home"
+    info "JAVA_HOME = $java_home"
   else
-    echo "JNI patch already applied or not applicable, skipping."
-  fi
-  cd "$PROJECT_ROOT"
-fi
-
-# --- Step 2: Install Conan dependencies ---
-echo ""
-echo ">>> Installing Conan dependencies..."
-PROFILE="$PROJECT_ROOT/profiles/$PLATFORM"
-
-# Determine build type: static→Release, Android JNI→MinSizeRel, desktop JNI→RelWithDebInfo
-BUILD_TYPE="Release"
-
-conan install "$PROJECT_ROOT" \
-  --profile:host="$PROFILE" \
-  --settings:host build_type="$BUILD_TYPE" \
-  --build=missing \
-  --output-folder="$BUILD_DIR"
-
-# --- Step 2.5: prepare_cross_compiling for cross-compile targets ---
-# When CMAKE_CROSSCOMPILING is true, TDLib skips generating source files
-# (mime_type_to_extension.cpp, TL schemas, etc.).  We need to build the
-# native generators first so those files exist in the source tree.
-NEEDS_PREPARE=false
-case "$PLATFORM" in
-  ios-*|android-*) NEEDS_PREPARE=true ;;
-  macos-x86_64)    NEEDS_PREPARE=true ;;   # CI runs on arm64; x86_64 is cross-compiled
-esac
-
-if $NEEDS_PREPARE; then
-  echo ""
-  echo ">>> Preparing cross-compilation (building native generators)..."
-  NATIVE_GEN_DIR="$PROJECT_ROOT/build/native-gen"
-
-  # Install native (host) Conan dependencies
-  conan install "$PROJECT_ROOT" \
-    --profile:build=default \
-    --profile:host=default \
-    --build=missing \
-    --output-folder="$NATIVE_GEN_DIR"
-
-  # Configure via root CMakeLists.txt (not td directly) so that the Conan
-  # OpenSSL/zlib bridge code is applied — td's generate_json needs libcrypto.
-  cmake -S "$PROJECT_ROOT" -B "$NATIVE_GEN_DIR" \
-    -DCMAKE_TOOLCHAIN_FILE="$NATIVE_GEN_DIR/conan_toolchain.cmake" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DTD_ANDROID_JSON=ON
-
-  # Build only the generators (prepare_cross_compiling target)
-  NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-  cmake --build "$NATIVE_GEN_DIR" --target prepare_cross_compiling --parallel "$NPROC"
-fi
-
-# --- Step 3: Configure CMake ---
-echo ""
-echo ">>> Configuring CMake..."
-
-TOOLCHAIN="$BUILD_DIR/conan_toolchain.cmake"
-CMAKE_ARGS=(
-  -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
-  -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
-  -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
-)
-
-if [[ "$TARGET" == "tdlib" ]]; then
-  # Static library build — build_type=Release set via Conan toolchain
-  CMAKE_ARGS+=(
-    -DTD_ANDROID_JSON=ON
-    -DTD_ENABLE_JNI=OFF
-    -DTD_ENABLE_LTO=OFF
-  )
-  cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
-else
-  # JNI build — build_type set via Conan toolchain (MinSizeRel for Android, RelWithDebInfo otherwise)
-  CMAKE_ARGS+=(
-    -DTD_ANDROID_JSON_JAVA=ON
-    -DTD_ENABLE_JNI=ON
-    -DTD_JNI_PACKAGE_NAME=io/xbot/tdlib
-  )
-
-  # Set JAVA_INCLUDE_PATH for JNI headers
-  if [[ -n "${JAVA_HOME:-}" ]]; then
-    case "$PLATFORM" in
-      macos-*|ios-*)
-        CMAKE_ARGS+=(
-          -DJAVA_INCLUDE_PATH="$JAVA_HOME/include"
-          -DJAVA_INCLUDE_PATH2="$JAVA_HOME/include/darwin"
-        )
-        ;;
-      *)
-        CMAKE_ARGS+=(
-          -DJAVA_INCLUDE_PATH="$JAVA_HOME/include"
-          -DJAVA_INCLUDE_PATH2="$JAVA_HOME/include/linux"
-        )
-        ;;
-    esac
+    info "JAVA_HOME not set; relying on system JDK discovery"
   fi
 
-  cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
-fi
+  # Linux: respect CC/CXX/CXXFLAGS from environment (CI: clang-18 + -stdlib=libc++)
+  local compiler_args=()
+  if [[ "$os" == "linux" ]]; then
+    [[ -n "${CC:-}"       ]] && compiler_args+=("-DCMAKE_C_COMPILER=${CC}")
+    [[ -n "${CXX:-}"      ]] && compiler_args+=("-DCMAKE_CXX_COMPILER=${CXX}")
+    [[ -n "${CXXFLAGS:-}" ]] && compiler_args+=("-DCMAKE_CXX_FLAGS=${CXXFLAGS}")
+  fi
 
-# --- Step 4: Build ---
-echo ""
-echo ">>> Building..."
-NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+  # Pass 1: build TDLib with JNI enabled
+  mkdir -p "$step1_build"
+  cmake -S "$TD_DIR" \
+        -B "$step1_build" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$step1_install" \
+        -DTD_ENABLE_JNI=ON \
+        -DTD_ENABLE_LTO=ON \
+        "${extra_args[@]}" \
+        "${compiler_args[@]}" \
+        2>&1 | sed 's/^/  /'
 
-# Build only the target we need — avoids building unnecessary benchmarks
-# and the shared tdjson library which can have link-order issues with LTO.
-if [[ "$TARGET" == "tdlib" ]]; then
-  cmake --build "$BUILD_DIR" --target tdjson_static --parallel "$NPROC"
-else
-  cmake --build "$BUILD_DIR" --target tdjni --parallel "$NPROC"
-fi
+  cmake --build "$step1_build" \
+        --target install \
+        --config Release \
+        -j"$NPROC" \
+        2>&1 | sed 's/^/  /'
 
-# --- Step 5: Collect output ---
-echo ""
-echo ">>> Collecting output..."
+  banner "Building TDLib JNI — ${os}/${arch} (pass 2: tdjni wrapper)"
 
-# Determine output directory: tdlib/{os}/{arch} or tdlib/{os}-jni/{arch}
-case "$PLATFORM" in
-  macos-*)   _OS="macos";   _ARCH="${PLATFORM#macos-}" ;;
-  linux-*)   _OS="linux";   _ARCH="${PLATFORM#linux-}" ;;
-  android-*) _OS="android"; _ARCH="${PLATFORM#android-}" ;;
-  ios-*)     _OS="ios";     _ARCH="${PLATFORM#ios-}" ;;
-esac
+  # Pass 2: build our JNI wrapper
+  mkdir -p "$step2_build"
+  cmake -S "$PROJECT_ROOT" \
+        -B "$step2_build" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$out_dir" \
+        -DTd_DIR="${step1_install}/lib/cmake/Td" \
+        "${extra_args[@]}" \
+        "${compiler_args[@]}" \
+        2>&1 | sed 's/^/  /'
 
-if [[ "$TARGET" == "tdlib_jni" && "$_OS" != "android" ]]; then
-  OUT_DIR="$PROJECT_ROOT/tdlib/${_OS}-jni/$_ARCH"
-else
-  OUT_DIR="$PROJECT_ROOT/tdlib/$_OS/$_ARCH"
-fi
+  cmake --build "$step2_build" \
+        --target install \
+        --config Release \
+        -j"$NPROC" \
+        2>&1 | sed 's/^/  /'
 
-rm -rf "$OUT_DIR"
+  success "JNI build complete → $out_dir"
+}
 
-if [[ "$TARGET" == "tdlib" ]]; then
-  # Static build: all .a libraries + headers
-  mkdir -p "$OUT_DIR/lib" "$OUT_DIR/include/td/telegram"
+# ── Android JNI ───────────────────────────────────────────────────────────────
+build_android_jni() {
+  local abi="$1"  # arm64-v8a | armeabi-v7a | x86_64 | x86
 
-  find "$BUILD_DIR" -name "*.a" -exec cp -v {} "$OUT_DIR/lib/" \;
+  local openssl_dir="$PROJECT_ROOT/third_party/openssl/android/${abi}"
+  local out_dir="$PROJECT_ROOT/out/android/${abi}"
+  local build_subdir="$BUILD_DIR/android-jni-${abi}"
 
-  find "$BUILD_DIR" -name "tdjson_export.h" -exec cp -v {} "$OUT_DIR/include/td/telegram/" \; 2>/dev/null || true
-  cp -v "$TD_DIR/td/telegram/td_json_client.h" "$OUT_DIR/include/"
-  cp -v "$TD_DIR/td/telegram/td_log.h" "$OUT_DIR/include/"
+  banner "Building TDLib JNI — Android/${abi}"
 
-  echo "Stripping static libraries..."
-  case "$_OS" in
-    macos|ios)
-      strip -S "$OUT_DIR"/lib/*.a 2>/dev/null || true
+  # Validate prerequisites
+  if [[ -z "${ANDROID_NDK_ROOT:-}" && -z "${ANDROID_NDK:-}" ]]; then
+    error "ANDROID_NDK_ROOT (or ANDROID_NDK) must be set to the NDK root directory."
+  fi
+  NDK_ROOT="${ANDROID_NDK_ROOT:-${ANDROID_NDK}}"
+  [[ -d "$NDK_ROOT" ]] || error "NDK directory not found: $NDK_ROOT"
+
+  if [[ ! -d "$openssl_dir" ]]; then
+    error "OpenSSL for Android/${abi} not found at $openssl_dir.\n" \
+          "Run: ./scripts/build-openssl-android.sh first."
+  fi
+
+  # Detect NDK version for toolchain file path
+  local toolchain_file="$NDK_ROOT/build/cmake/android.toolchain.cmake"
+  [[ -f "$toolchain_file" ]] || error "NDK toolchain file not found: $toolchain_file"
+
+  # Map ABI to MIN_SDK_VERSION
+  local min_sdk=21
+  [[ "$abi" == "armeabi-v7a" ]] && min_sdk=16
+
+  prepare_cross_compiling
+
+  mkdir -p "$build_subdir"
+  cmake -S "$TD_DIR/example/android" \
+        -B "$build_subdir" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$out_dir" \
+        -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
+        -DANDROID_ABI="$abi" \
+        -DANDROID_PLATFORM="android-${min_sdk}" \
+        -DANDROID_STL=c++_static \
+        -DTD_ANDROID_JSON_JAVA=ON \
+        -DOPENSSL_ROOT_DIR="$openssl_dir" \
+        -DNATIVE_GEN_DIR="$NATIVE_GEN_DIR" \
+        2>&1 | sed 's/^/  /'
+
+  cmake --build "$build_subdir" \
+        --target install \
+        --config Release \
+        -j"$NPROC" \
+        2>&1 | sed 's/^/  /'
+
+  # Flatten output: only libtdjni.so belongs in out/android/{abi}/
+  if [[ -d "$out_dir/lib" ]]; then
+    find "$out_dir/lib" -name "libtdjni.so" -exec cp {} "$out_dir/" \; 2>/dev/null || true
+    # Remove include/ from android output (not needed for JNI .so distribution)
+    rm -rf "$out_dir/include" 2>/dev/null || true
+  fi
+
+  success "Android JNI build complete → $out_dir"
+}
+
+# ── iOS static ────────────────────────────────────────────────────────────────
+build_ios_static() {
+  local arch_variant="$1"  # arm64 | arm64-simulator | x86_64-simulator
+
+  local ios_platform out_dir build_subdir cmake_arch
+
+  case "$arch_variant" in
+    arm64)
+      ios_platform="OS64"
+      cmake_arch="arm64"
       ;;
-    linux)
-      strip --strip-unneeded "$OUT_DIR"/lib/*.a 2>/dev/null || true
+    arm64-simulator)
+      ios_platform="SIMULATORARM64"
+      cmake_arch="arm64"
+      ;;
+    x86_64-simulator)
+      ios_platform="SIMULATOR64"
+      cmake_arch="x86_64"
+      ;;
+    *)
+      error "Unknown iOS arch variant: $arch_variant"
       ;;
   esac
 
-elif [[ "$_OS" == "android" ]]; then
-  # Android JNI: shared libraries, flat directory
-  mkdir -p "$OUT_DIR"
-  find "$BUILD_DIR" -name "libtdjsonjava.so" ! -name "*.debug" -exec cp -p {} "$OUT_DIR/" \;
-  rm -f "$OUT_DIR"/*.so.debug 2>/dev/null
+  out_dir="$PROJECT_ROOT/out/ios-${arch_variant}"
+  build_subdir="$BUILD_DIR/ios-static-${arch_variant}"
 
-else
-  # Desktop JNI (macOS/Linux): shared library into lib/
-  mkdir -p "$OUT_DIR/lib"
-  case "$_OS" in
-    macos)
-      find "$BUILD_DIR" -name "libtdjsonjava*.dylib" ! -name "*.debug" -exec cp -av {} "$OUT_DIR/lib/" \;
-      ;;
-    linux)
-      find "$BUILD_DIR" -name "libtdjsonjava.so*" ! -name "*.debug" -exec cp -av {} "$OUT_DIR/lib/" \;
-      ;;
-  esac
-fi
+  local openssl_ios_dir="$PROJECT_ROOT/third_party/openssl/ios"
+  local openssl_plat_dir="$openssl_ios_dir/${ios_platform}"
 
-echo ""
-echo "═══════════════════════════════════════════════════"
-echo "  Build complete: $OUT_DIR"
-echo "═══════════════════════════════════════════════════"
-ls -lhR "$OUT_DIR/"
+  if [[ ! -d "$openssl_plat_dir" ]]; then
+    error "OpenSSL for iOS/${ios_platform} not found at $openssl_plat_dir.\n" \
+          "Run: ./scripts/build-openssl-ios.sh first."
+  fi
+
+  # Locate iOS.cmake toolchain (bundled in TDLib)
+  local ios_toolchain="$TD_DIR/CMake/iOS.cmake"
+  [[ -f "$ios_toolchain" ]] || error "iOS toolchain not found: $ios_toolchain"
+
+  banner "Building TDLib static — ios-${arch_variant} (${ios_platform})"
+
+  prepare_cross_compiling
+
+  mkdir -p "$build_subdir"
+  cmake -S "$TD_DIR" \
+        -B "$build_subdir" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$out_dir" \
+        -DCMAKE_TOOLCHAIN_FILE="$ios_toolchain" \
+        -DIOS_PLATFORM="$ios_platform" \
+        -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \
+        -DTD_ENABLE_JNI=OFF \
+        -DTD_ENABLE_LTO=ON \
+        -DOPENSSL_ROOT_DIR="$openssl_plat_dir" \
+        -DNATIVE_GEN_DIR="$NATIVE_GEN_DIR" \
+        2>&1 | sed 's/^/  /'
+
+  cmake --build "$build_subdir" \
+        --target install \
+        --config Release \
+        -j"$NPROC" \
+        2>&1 | sed 's/^/  /'
+
+  success "iOS static build complete → $out_dir"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dispatch
+# ═══════════════════════════════════════════════════════════════════════════════
+
+case "$PLATFORM" in
+
+  # ── macOS ──────────────────────────────────────────────────────────────────
+  macos-arm64)
+    if [[ "$TARGET" == "tdlib" ]]; then
+      build_desktop_static macos arm64
+    else
+      apply_patch
+      build_desktop_jni macos arm64
+    fi
+    ;;
+
+  macos-x86_64)
+    if [[ "$TARGET" == "tdlib" ]]; then
+      build_desktop_static macos x86_64
+    else
+      apply_patch
+      build_desktop_jni macos x86_64
+    fi
+    ;;
+
+  # ── Linux ──────────────────────────────────────────────────────────────────
+  linux-x86_64)
+    if [[ "$TARGET" == "tdlib" ]]; then
+      build_desktop_static linux x86_64
+    else
+      apply_patch
+      build_desktop_jni linux x86_64
+    fi
+    ;;
+
+  linux-arm64)
+    if [[ "$TARGET" == "tdlib" ]]; then
+      build_desktop_static linux arm64
+    else
+      apply_patch
+      build_desktop_jni linux arm64
+    fi
+    ;;
+
+  # ── Android ────────────────────────────────────────────────────────────────
+  android-arm64-v8a)
+    [[ "$TARGET" == "tdlib_jni" ]] || error "Android only supports target 'tdlib_jni'"
+    apply_patch
+    build_android_jni arm64-v8a
+    ;;
+
+  android-armeabi-v7a)
+    [[ "$TARGET" == "tdlib_jni" ]] || error "Android only supports target 'tdlib_jni'"
+    apply_patch
+    build_android_jni armeabi-v7a
+    ;;
+
+  android-x86_64)
+    [[ "$TARGET" == "tdlib_jni" ]] || error "Android only supports target 'tdlib_jni'"
+    apply_patch
+    build_android_jni x86_64
+    ;;
+
+  android-x86)
+    [[ "$TARGET" == "tdlib_jni" ]] || error "Android only supports target 'tdlib_jni'"
+    apply_patch
+    build_android_jni x86
+    ;;
+
+  # ── iOS ────────────────────────────────────────────────────────────────────
+  ios-arm64)
+    [[ "$TARGET" == "tdlib" ]] || error "iOS only supports target 'tdlib'"
+    build_ios_static arm64
+    ;;
+
+  ios-arm64-simulator)
+    [[ "$TARGET" == "tdlib" ]] || error "iOS only supports target 'tdlib'"
+    build_ios_static arm64-simulator
+    ;;
+
+  ios-x86_64-simulator)
+    [[ "$TARGET" == "tdlib" ]] || error "iOS only supports target 'tdlib'"
+    build_ios_static x86_64-simulator
+    ;;
+
+  *)
+    error "Unhandled platform: $PLATFORM"
+    ;;
+esac
+
+banner "Build finished successfully"
+success "Target  : $TARGET"
+success "Platform: $PLATFORM"
