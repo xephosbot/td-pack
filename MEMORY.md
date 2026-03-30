@@ -51,6 +51,27 @@
 - 13 статических `.a` на архив (включая `libcrypto` и `libssl`)
 - JNI-архив десктоп содержит `include/` — Android JNI `include/` не нужен
 
+## Статус выполнения
+
+| Фаза | Статус | Примечание |
+|---|---|---|
+| 1 — Анализ и Подготовка | ✅ Выполнено | Официальные инструкции изучены, стратегия выбрана |
+| 2 — Структура CMake | ✅ Выполнено | `CMakeLists.txt` — JNI-враппер, двухпроходная сборка |
+| 3 — Сборка зависимостей | ✅ Выполнено | Scripts: build-openssl-android.sh, build-openssl-ios.sh |
+| 4 — CI/CD (19 job) | ✅ Выполнено | `.github/workflows/build.yml` — 19 builds + release |
+| 5 — Тестирование | ⏳ Не начато | Внешний KMP-репозиторий |
+| 6 — Документация | ⏳ Не начато | README требует обновления |
+
+**Готовые файлы:**
+- `CMakeLists.txt` — JNI-враппер (pass 2), `PACKAGE_NAME=io/xbot/tdlib`
+- `build.sh` — Unix-драйвер, 11 платформ
+- `build.ps1` — Windows PowerShell, vcpkg pinned `bc3512a`
+- `scripts/build-openssl-android.sh` — OpenSSL для Android (все 4 ABI)
+- `scripts/build-openssl-ios.sh` — OpenSSL для iOS (OS64, SIMULATORARM64, SIMULATOR64)
+- `.github/workflows/build.yml` — CI/CD, 19 сборок + GitHub Release
+
+---
+
 ## Фазы реализации
 
 ### Фаза 1 — Анализ и Подготовка (~2–3 дня, Высокий приоритет)
