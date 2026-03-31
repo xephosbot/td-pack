@@ -217,6 +217,16 @@ function Build-Jni {
 
     New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
+    # Locate vcpkg-installed gperf.  gperf is always installed with the plain
+    # x64-windows (or arm64-windows) triplet, but the JNI build uses the
+    # static-md triplet.  The vcpkg toolchain does not search across triplets,
+    # so we need to pass -DGPERF_EXECUTABLE explicitly.
+    $GperfExe = Join-Path $VcpkgDir "installed\${VcpkgArch}-windows\tools\gperf\gperf.exe"
+    if (-not (Test-Path $GperfExe)) {
+        Write-Fail "gperf not found at $GperfExe — did vcpkg install gperf:${VcpkgArch}-windows succeed?"
+    }
+    Write-Info "Using gperf: $GperfExe"
+
     # Build via root CMakeLists.txt with TD_ANDROID_JSON_JAVA=ON to produce
     # the proper tdjni shared library (tdjsonjava.dll) with td_jni.cpp.
     # TD_PACK_STATIC_DEPS=ON ensures OpenSSL and zlib are statically linked so
@@ -230,7 +240,8 @@ function Build-Jni {
         '-DTD_PACK_STATIC_DEPS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet",
-        "-DJAVA_HOME=$JavaHome"
+        "-DJAVA_HOME=$JavaHome",
+        "-DGPERF_EXECUTABLE=$GperfExe"
     )
 
     Invoke-Cmd cmake @(
