@@ -265,12 +265,12 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # Cache vcpkg installed packages (keyed on pinned commit — never changes)
+      # Cache vcpkg installed packages (keyed on pinned commit + target type)
       - name: Cache vcpkg packages
         uses: actions/cache@v4
         with:
           path: build\vcpkg\installed
-          key: vcpkg-${{ matrix.platform }}-bc3512a509f9d29b37346a7e7e929f9a26e66c7e
+          key: vcpkg-${{ matrix.platform }}-${{ matrix.target }}-bc3512a509f9d29b37346a7e7e929f9a26e66c7e
 
       - name: Build
         run: .\build.ps1 -Target ${{ matrix.target }} -Platform ${{ matrix.platform }}
@@ -395,7 +395,7 @@ jobs:
           submodules: recursive
 
       - name: Install dependencies
-        run: brew install gperf cmake ccache coreutils
+        run: brew install gperf cmake openssl ccache coreutils
 
       # Cache the entire ios OpenSSL tree — all platforms built at once
       - name: Cache OpenSSL for iOS
@@ -403,7 +403,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/openssl/ios
-          key: openssl-ios-${{ hashFiles('td/example/ios/build-openssl.sh') }}
+          key: openssl-ios-${{ hashFiles('scripts/build-openssl-ios.sh') }}
 
       - name: Build OpenSSL for iOS (all platforms)
         if: steps.cache-openssl-ios.outputs.cache-hit != 'true'
@@ -555,9 +555,9 @@ jobs:
             `libtdapi.a`, `libtdactor.a`, `libtdutils.a`, `libtddb.a`, `libtdsqlite.a`,
             `libtdnet.a`, `libtdmtproto.a`, `libtde2e.a`, `libcrypto.a`, `libssl.a`
 
-            **JNI desktop** (`lib/libtdjni.{so,dylib}` or `lib/tdjni.dll` + `include/`)
+            **JNI desktop** (`lib/libtdjsonjava.{so,dylib}` or `lib/tdjsonjava.dll`)
 
-            **JNI Android** (`libtdjni.so` — flat, no headers)
+            **JNI Android** (`libtdjsonjava.so` — flat, no headers)
           files: release/*.tar.gz
           draft: false
           prerelease: false
