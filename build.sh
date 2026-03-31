@@ -194,6 +194,7 @@ build_desktop_static() {
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
         -DTD_ENABLE_JNI=OFF \
+        -DOPENSSL_USE_STATIC_LIBS=ON \
         "${extra_args[@]}" \
         2>&1 | sed 's/^/  /'
 
@@ -360,9 +361,7 @@ build_android_jni() {
   local toolchain_file="$NDK_ROOT/build/cmake/android.toolchain.cmake"
   [[ -f "$toolchain_file" ]] || error "NDK toolchain file not found: $toolchain_file"
 
-  # Map ABI to MIN_SDK_VERSION
   local min_sdk=21
-  [[ "$abi" == "armeabi-v7a" ]] && min_sdk=16
 
   prepare_cross_compiling
 

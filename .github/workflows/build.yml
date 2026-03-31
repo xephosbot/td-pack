@@ -284,7 +284,7 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────
   #  Android  (4 ABIs — JNI only) = 4 builds
-  #  Runner:  ubuntu-latest + Android NDK r26d
+  #  Runner:  ubuntu-latest + Android NDK r27c
   #
   #  OpenSSL is built once (cached by NDK version) before the TDLib build.
   #  Two-pass strategy (prepare_cross_compiling) is handled inside build.sh.
@@ -307,11 +307,11 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y make gperf cmake g++ ccache
 
-      - name: Setup NDK r26d
+      - name: Setup NDK r27c
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r26d
+          ndk-version: r27c
           link-to-sdk: true
 
       # Cache all 4 ABI OpenSSL dirs together — shared key, built once per CI run
@@ -320,7 +320,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/openssl/android
-          key: openssl-android-ndk26d-1.1.1w
+          key: openssl-android-ndk27c-1.1.1w
 
       - name: Build OpenSSL for Android (all ABIs)
         if: steps.cache-openssl.outputs.cache-hit != 'true'
