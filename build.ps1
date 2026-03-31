@@ -165,7 +165,7 @@ function Build-Static {
         '-B', $BuildSub,
         "-DCMAKE_BUILD_TYPE=Release",
         '-DTD_ENABLE_JNI=OFF',
-        '-DTD_ENABLE_LTO=ON',
+        '-DOPENSSL_USE_STATIC_LIBS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet"
     )
