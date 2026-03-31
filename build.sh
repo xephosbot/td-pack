@@ -179,17 +179,44 @@ build_desktop_static() {
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="$out_dir" \
         -DTD_ENABLE_JNI=OFF \
         -DTD_ENABLE_LTO=ON \
         "${extra_args[@]}" \
         2>&1 | sed 's/^/  /'
 
   cmake --build "$build_subdir" \
-        --target install \
+        --target tdjson_static \
         --config Release \
         -j"$NPROC" \
         2>&1 | sed 's/^/  /'
+
+  # Manual copy of artifacts
+  mkdir -p "$out_dir/lib"
+  mkdir -p "$out_dir/include/td/telegram"
+
+  # Copy all .a files from build dir (1 and 2 levels deep)
+  cp -v "$build_subdir"/*.a "$out_dir/lib" 2>/dev/null || true
+  cp -v "$build_subdir"/*/*.a "$out_dir/lib" 2>/dev/null || true
+
+  # Copy OpenSSL static libraries
+  if [[ "$os" == "macos" ]]; then
+    cp -v "$openssl_root/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
+    cp -v "$openssl_root/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
+  else
+    # Linux: copy system OpenSSL .a if available
+    for d in /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/lib; do
+      if [[ -f "$d/libcrypto.a" ]]; then
+        cp -v "$d/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
+        cp -v "$d/libssl.a" "$out_dir/lib" 2>/dev/null || true
+        break
+      fi
+    done
+  fi
+
+  # Copy specific headers
+  cp -v "$build_subdir/td/telegram/tdjson_export.h" "$out_dir/include/td/telegram" 2>/dev/null || true
+  cp -v "$TD_DIR/td/telegram/td_json_client.h" "$out_dir/include" 2>/dev/null || true
+  cp -v "$TD_DIR/td/telegram/td_log.h" "$out_dir/include" 2>/dev/null || true
 
   success "Static build complete → $out_dir"
 }
@@ -199,12 +226,10 @@ build_desktop_jni() {
   local os="$1"
   local arch="$2"
 
-  local step1_install="$BUILD_DIR/${os}-jni-step1-${arch}/install"
-  local step1_build="$BUILD_DIR/${os}-jni-step1-${arch}/build"
-  local step2_build="$BUILD_DIR/${os}-jni-step2-${arch}"
+  local build_subdir="$BUILD_DIR/${os}-jni-${arch}"
   local out_dir="$PROJECT_ROOT/out/${os}-jni/${arch}"
 
-  banner "Building TDLib JNI — ${os}/${arch} (pass 1: TDLib)"
+  banner "Building TDLib JNI — ${os}/${arch}"
 
   local extra_args=()
 
@@ -250,42 +275,33 @@ build_desktop_jni() {
     [[ -n "${CXXFLAGS:-}" ]] && compiler_args+=("-DCMAKE_CXX_FLAGS=${CXXFLAGS}")
   fi
 
-  # Pass 1: build TDLib with JNI enabled
-  mkdir -p "$step1_build"
+  # Single-pass: configure TDLib directly with JNI enabled, build tdjson shared library
+  mkdir -p "$build_subdir"
   cmake -S "$TD_DIR" \
-        -B "$step1_build" \
+        -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="$step1_install" \
         -DTD_ENABLE_JNI=ON \
-        -DTD_ENABLE_LTO=ON \
+        -DTD_ENABLE_LTO=OFF \
         "${extra_args[@]}" \
         "${compiler_args[@]}" \
         2>&1 | sed 's/^/  /'
 
-  cmake --build "$step1_build" \
-        --target install \
+  cmake --build "$build_subdir" \
+        --target tdjson \
         --config Release \
         -j"$NPROC" \
         2>&1 | sed 's/^/  /'
 
-  banner "Building TDLib JNI — ${os}/${arch} (pass 2: tdjni wrapper)"
+  # Manual copy of shared library
+  mkdir -p "$out_dir/lib"
 
-  # Pass 2: build our JNI wrapper
-  mkdir -p "$step2_build"
-  cmake -S "$PROJECT_ROOT" \
-        -B "$step2_build" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="$out_dir" \
-        -DTd_DIR="${step1_install}/lib/cmake/Td" \
-        "${extra_args[@]}" \
-        "${compiler_args[@]}" \
-        2>&1 | sed 's/^/  /'
-
-  cmake --build "$step2_build" \
-        --target install \
-        --config Release \
-        -j"$NPROC" \
-        2>&1 | sed 's/^/  /'
+  if [[ "$os" == "macos" ]]; then
+    # Preserve symlinks for .dylib
+    cp -av "$build_subdir"/libtdjson*.dylib "$out_dir/lib/" 2>/dev/null || true
+  else
+    # Linux .so files
+    cp -av "$build_subdir"/libtdjson*.so* "$out_dir/lib/" 2>/dev/null || true
+  fi
 
   success "JNI build complete → $out_dir"
 }
@@ -326,7 +342,6 @@ build_android_jni() {
   cmake -S "$TD_DIR/example/android" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="$out_dir" \
         -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
         -DANDROID_ABI="$abi" \
         -DANDROID_PLATFORM="android-${min_sdk}" \
@@ -337,17 +352,14 @@ build_android_jni() {
         2>&1 | sed 's/^/  /'
 
   cmake --build "$build_subdir" \
-        --target install \
+        --target tdjni \
         --config Release \
         -j"$NPROC" \
         2>&1 | sed 's/^/  /'
 
-  # Flatten output: only libtdjni.so belongs in out/android/{abi}/
-  if [[ -d "$out_dir/lib" ]]; then
-    find "$out_dir/lib" -name "libtdjni.so" -exec cp {} "$out_dir/" \; 2>/dev/null || true
-    # Remove include/ from android output (not needed for JNI .so distribution)
-    rm -rf "$out_dir/include" 2>/dev/null || true
-  fi
+  # Manual copy of shared library
+  mkdir -p "$out_dir"
+  cp -v "$build_subdir"/libtdjsonjava.so "$out_dir/" 2>/dev/null || true
 
   success "Android JNI build complete → $out_dir"
 }
@@ -399,7 +411,6 @@ build_ios_static() {
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX="$out_dir" \
         -DCMAKE_TOOLCHAIN_FILE="$ios_toolchain" \
         -DIOS_PLATFORM="$ios_platform" \
         -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \
@@ -410,10 +421,27 @@ build_ios_static() {
         2>&1 | sed 's/^/  /'
 
   cmake --build "$build_subdir" \
-        --target install \
+        --target tdjson_static \
         --config Release \
         -j"$NPROC" \
         2>&1 | sed 's/^/  /'
+
+  # Manual copy of artifacts
+  mkdir -p "$out_dir/lib"
+  mkdir -p "$out_dir/include/td/telegram"
+
+  # Copy all .a files from build dir (1 and 2 levels deep)
+  cp -v "$build_subdir"/*.a "$out_dir/lib" 2>/dev/null || true
+  cp -v "$build_subdir"/*/*.a "$out_dir/lib" 2>/dev/null || true
+
+  # Copy OpenSSL static libraries
+  cp -v "$openssl_plat_dir/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
+  cp -v "$openssl_plat_dir/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
+
+  # Copy specific headers
+  cp -v "$build_subdir/td/telegram/tdjson_export.h" "$out_dir/include/td/telegram" 2>/dev/null || true
+  cp -v "$TD_DIR/td/telegram/td_json_client.h" "$out_dir/include" 2>/dev/null || true
+  cp -v "$TD_DIR/td/telegram/td_log.h" "$out_dir/include" 2>/dev/null || true
 
   success "iOS static build complete → $out_dir"
 }

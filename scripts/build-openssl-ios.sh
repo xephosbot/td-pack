@@ -152,11 +152,55 @@ for plat in "${PLATFORMS[@]}"; do
   fi
 done
 
-if $all_ok; then
-  success "All iOS platforms built and organised successfully"
-else
-  error "One or more iOS platform builds are incomplete. Check the output above."
-fi
+  local build_dir="$BUILD_TMP/build-$platform_name"
+  rm -rf "$build_dir"
+  mkdir -p "$build_dir"
+  cp -R "$BUILD_TMP/src/openssl-${OPENSSL_VERSION}/." "$build_dir/"
+
+  mkdir -p "$out_dir"
+
+  (
+    cd "$build_dir"
+
+    # Override CC and CFLAGS so OpenSSL uses the correct target triple.
+    # Using the darwin64-* configure targets (not ios64-cross / iossimulator-xcrun)
+    # avoids the CROSS_COMPILE mechanism that appends an extra -simulator suffix.
+    export CC="$clang"
+    export CFLAGS="-arch $arch -target $target_triple -isysroot $sdk_path $min_flag"
+    export CXXFLAGS="$CFLAGS"
+    export LDFLAGS="-arch $arch -target $target_triple -isysroot $sdk_path $min_flag"
+
+    ./Configure "$openssl_target" \
+      --prefix="$out_dir" \
+      no-shared \
+      no-tests \
+      no-dso \
+      no-engine \
+      no-comp \
+      no-hw \
+      no-async \
+      2>&1 | sed 's/^/  /'
+
+    make -j"$(sysctl -n hw.logicalcpu)" install_dev 2>&1 | sed 's/^/  /'
+  )
+
+  success "Platform $platform_name → $out_dir"
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+banner "Building OpenSSL ${OPENSSL_VERSION} for iOS (all platforms)"
+info "Output dir: $OUTPUT_DIR"
+
+download_openssl
+extract_openssl
+
+# ┌─ Platform       ─ arch   ─ sdk               ─ sim   ─ openssl target ─────┐
+build_target  OS64           arm64   iphoneos        false  darwin64-arm64-cc
+build_target  SIMULATORARM64 arm64   iphonesimulator true   darwin64-arm64-cc
+build_target  SIMULATOR64    x86_64  iphonesimulator true   darwin64-x86_64-cc
+
+# Clean up temp build trees (keep the tarball for potential re-use)
+rm -rf "$BUILD_TMP/build-"* "$BUILD_TMP/src" 2>/dev/null || true
 
 banner "OpenSSL for iOS — done"
 info "Outputs: $OUTPUT_DIR/{OS64,SIMULATORARM64,SIMULATOR64}/"
