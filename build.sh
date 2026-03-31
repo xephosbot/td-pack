@@ -424,6 +424,12 @@ build_ios_static() {
 
   prepare_cross_compiling
 
+  # The iOS.cmake toolchain restricts CMAKE_FIND_ROOT_PATH_MODE_PROGRAM to
+  # ONLY, which prevents CMake from finding the host 'make' binary.  Resolve
+  # it before cross-configure and pass it explicitly.
+  local host_make
+  host_make="$(command -v make)" || error "'make' not found on the host system"
+
   mkdir -p "$build_subdir"
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
@@ -431,6 +437,7 @@ build_ios_static() {
         -DCMAKE_TOOLCHAIN_FILE="$ios_toolchain" \
         -DIOS_PLATFORM="$ios_platform" \
         -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \
+        -DCMAKE_MAKE_PROGRAM="$host_make" \
         -DTD_ENABLE_JNI=OFF \
         -DTD_ENABLE_LTO=ON \
         -DOPENSSL_ROOT_DIR="$openssl_plat_dir" \
