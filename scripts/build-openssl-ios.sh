@@ -159,7 +159,7 @@ build_target() {
       no-async \
       2>&1 | sed 's/^/  /'
 
-    make -j"$(sysctl -n hw.logicalcpu)" install_sw 2>&1 | sed 's/^/  /'
+    make -j"$(sysctl -n hw.logicalcpu)" install_dev 2>&1 | sed 's/^/  /'
   )
 
   success "Platform $platform_name → $out_dir"

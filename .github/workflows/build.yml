@@ -32,7 +32,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   #  macOS  (arm64 + x86_64) × (static + JNI) = 4 builds
   #  Runners:  macos-15       → Apple Silicon (arm64)
-  #            macos-13       → Intel         (x86_64)
+  #            macos-15       → x86_64 (cross-compiled on ARM with Rosetta OpenSSL)
   # ─────────────────────────────────────────────────────────────────────────────
   macos:
     runs-on: ${{ matrix.runner }}
@@ -53,13 +53,13 @@ jobs:
             artifact: tdlib-macos-jni-arm64
             out:      out/macos-jni/arm64
 
-          - runner:   macos-13
+          - runner:   macos-15
             target:   tdlib
             platform: macos-x86_64
             artifact: tdlib-macos-x86_64
             out:      out/macos/x86_64
 
-          - runner:   macos-13
+          - runner:   macos-15
             target:   tdlib_jni
             platform: macos-x86_64
             artifact: tdlib-macos-jni-x86_64
@@ -71,7 +71,13 @@ jobs:
           submodules: recursive
 
       - name: Install dependencies
-        run: brew install gperf cmake openssl ccache
+        run: |
+          brew install gperf cmake openssl ccache
+          # For x86_64 cross-compilation on ARM runner, install x86_64 OpenSSL via Rosetta
+          if [[ "${{ matrix.platform }}" == "macos-x86_64" ]]; then
+            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
+            arch -x86_64 /usr/local/bin/brew install openssl
+          fi
 
       - name: Setup Java (JNI only)
         if: matrix.target == 'tdlib_jni'
@@ -319,8 +325,8 @@ jobs:
       - name: Build OpenSSL for Android (all ABIs)
         if: steps.cache-openssl.outputs.cache-hit != 'true'
         run: |
-          # Derive numeric NDK version from the installed path (e.g. 26.1.10909125)
-          NDK_VERSION=$(basename "${{ steps.setup-ndk.outputs.ndk-path }}")
+          # Extract numeric NDK version from source.properties (e.g. 26.1.10909125)
+          NDK_VERSION=$(grep 'Pkg.Revision' "${{ steps.setup-ndk.outputs.ndk-path }}/source.properties" | awk -F= '{print $2}' | tr -d ' ')
           pushd td/example/android
           ./build-openssl.sh \
             "$ANDROID_HOME" \
