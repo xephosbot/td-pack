@@ -128,7 +128,10 @@ prepare_cross_compiling() {
   fi
 
   local extra_args=()
-  # On macOS, Homebrew OpenSSL is keg-only; help CMake find it.
+  # On macOS, Homebrew OpenSSL is keg-only and CMake cannot find it without a
+  # hint.  The native code generator itself does not link OpenSSL, but td's
+  # CMakeLists.txt still requires find_package(OpenSSL) to succeed at
+  # configure time.
   if [[ "$(uname)" == "Darwin" ]]; then
     if [[ -d "/opt/homebrew/opt/openssl" ]]; then
       extra_args+=("-DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl")
