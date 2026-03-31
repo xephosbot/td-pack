@@ -174,6 +174,7 @@ done
       --prefix="$out_dir" \
       no-shared \
       no-tests \
+      no-apps \
       no-dso \
       no-engine \
       no-comp \
