@@ -157,7 +157,6 @@ function Build-Static {
         "-DCMAKE_BUILD_TYPE=Release",
         "-DCMAKE_INSTALL_PREFIX=$OutDir",
         '-DTD_ENABLE_JNI=OFF',
-        '-DTD_ENABLE_LTO=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=${VcpkgArch}-windows"
     )
@@ -183,11 +182,14 @@ function Build-Jni {
     if (-not $JavaHome -or -not (Test-Path $JavaHome)) {
         Write-Fail "JAVA_HOME is not set or does not exist. Set it to a JDK installation (e.g. C:\Program Files\Eclipse Adoptium\jdk-17)."
     }
+    # Convert backslashes to forward slashes — CMake's FindJNI fails on Windows
+    # paths that contain backslash escape sequences like \h, \u, \j, etc.
+    $JavaHome = $JavaHome -replace '\\', '/'
     Write-Info "JAVA_HOME = $JavaHome"
 
-    # Build JNI include flags for Windows (requires include\win32 subdir)
-    $JavaInclude     = Join-Path $JavaHome 'include'
-    $JavaIncludeWin  = Join-Path $JavaInclude 'win32'
+    # Build JNI include flags for Windows (requires include/win32 subdir)
+    $JavaInclude    = "$JavaHome/include"
+    $JavaIncludeWin = "$JavaHome/include/win32"
 
     Write-Banner "Building TDLib JNI — windows/$OutSuffix (pass 1: TDLib)"
 
@@ -200,7 +202,6 @@ function Build-Jni {
         '-DCMAKE_BUILD_TYPE=Release',
         "-DCMAKE_INSTALL_PREFIX=$Step1Install",
         '-DTD_ENABLE_JNI=ON',
-        '-DTD_ENABLE_LTO=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=${VcpkgArch}-windows",
         "-DJAVA_HOME=$JavaHome",
@@ -217,7 +218,7 @@ function Build-Jni {
 
     Write-Banner "Building TDLib JNI — windows/$OutSuffix (pass 2: tdjni wrapper)"
 
-    $TdCmakeDir = Join-Path $Step1Install 'lib\cmake\Td'
+    $TdCmakeDir = ($Step1Install + '/lib/cmake/Td') -replace '\\', '/'
     New-Item -ItemType Directory -Force -Path $Step2Build | Out-Null
 
     Invoke-Cmd cmake @(

@@ -81,7 +81,7 @@ endif()
 
 option(TD_ANDROID_JSON "Use \"ON\" to build JSON interface.")
 option(TD_ANDROID_JSON_JAVA "Use \"ON\" to build Java wrapper for JSON API.")
-option(TD_PACK_LTO "Enable LTO optimization" ON)
+option(TD_PACK_LTO "Enable LTO optimization" OFF)
 
 if (TD_ANDROID_JSON)
   if (TD_PACK_LTO)
