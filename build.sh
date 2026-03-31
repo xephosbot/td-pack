@@ -431,6 +431,10 @@ build_ios_static() {
   host_make="$(command -v make)" || error "'make' not found on the host system"
 
   mkdir -p "$build_subdir"
+  # The iOS.cmake toolchain sets CMAKE_FIND_ROOT_PATH_MODE_LIBRARY and
+  # CMAKE_FIND_ROOT_PATH_MODE_INCLUDE to ONLY, so find_package(OpenSSL)
+  # cannot locate libraries outside the iOS SDK sysroot.  Pass the paths
+  # explicitly so CMake finds our cross-compiled OpenSSL.
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
@@ -441,7 +445,9 @@ build_ios_static() {
         -DTD_ENABLE_JNI=OFF \
         -DTD_ENABLE_LTO=ON \
         -DOPENSSL_ROOT_DIR="$openssl_plat_dir" \
-        -DNATIVE_GEN_DIR="$NATIVE_GEN_DIR" \
+        -DOPENSSL_CRYPTO_LIBRARY="$openssl_plat_dir/lib/libcrypto.a" \
+        -DOPENSSL_SSL_LIBRARY="$openssl_plat_dir/lib/libssl.a" \
+        -DOPENSSL_INCLUDE_DIR="$openssl_plat_dir/include" \
         2>&1 | sed 's/^/  /'
 
   cmake --build "$build_subdir" \
