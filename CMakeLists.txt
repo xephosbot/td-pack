@@ -4,9 +4,27 @@ project(TdAndroid VERSION 1.0 LANGUAGES CXX)
 
 set(TD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/td)
 
+option(TD_PACK_STATIC_DEPS "Prefer static libraries for dependencies (used by JNI builds)" OFF)
+
+# When building JNI shared libraries we need OpenSSL/zlib statically linked
+# inside the .so/.dylib so the result is portable.
+if (TD_PACK_STATIC_DEPS)
+  set(OPENSSL_USE_STATIC_LIBS ON)
+  set(_td_pack_save_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES})
+  if (WIN32)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a)
+  else()
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+  endif()
+endif()
+
 # Conan-provided dependencies
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
+
+if (TD_PACK_STATIC_DEPS)
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${_td_pack_save_suffixes})
+endif()
 
 # Conan's config-mode find_package creates imported targets but may not set
 # the legacy Find-module variables (OPENSSL_INCLUDE_DIR, OPENSSL_CRYPTO_LIBRARY,
@@ -166,6 +184,7 @@ else()
 
   if (TD_ANDROID_JSON_JAVA)
     # Desktop JNI: build a tdjni shared library just like the cross-compile path
+    find_package(JNI REQUIRED)
     add_library(tdjni SHARED "${TD_DIR}/example/java/td_jni.cpp")
     target_include_directories(tdjni SYSTEM PRIVATE ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
     target_link_libraries(tdjni PRIVATE Td::TdJsonStatic Td::TdStatic)

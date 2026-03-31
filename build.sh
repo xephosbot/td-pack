@@ -127,12 +127,26 @@ prepare_cross_compiling() {
     return 0
   fi
 
+  local extra_args=()
+  # On macOS, Homebrew OpenSSL is keg-only and CMake cannot find it without a
+  # hint.  The native code generator itself does not link OpenSSL, but td's
+  # CMakeLists.txt still requires find_package(OpenSSL) to succeed at
+  # configure time.
+  if [[ "$(uname)" == "Darwin" ]]; then
+    if [[ -d "/opt/homebrew/opt/openssl" ]]; then
+      extra_args+=("-DOPENSSL_ROOT_DIR=/opt/homebrew/opt/openssl")
+    elif [[ -d "/usr/local/opt/openssl" ]]; then
+      extra_args+=("-DOPENSSL_ROOT_DIR=/usr/local/opt/openssl")
+    fi
+  fi
+
   mkdir -p "$NATIVE_GEN_DIR"
   cmake -S "$TD_DIR" \
         -B "$NATIVE_GEN_DIR" \
         -DCMAKE_BUILD_TYPE=Release \
         -DTD_ENABLE_JNI=OFF \
         -DCMAKE_INSTALL_PREFIX="$NATIVE_GEN_DIR/install" \
+        "${extra_args[@]}" \
         2>&1 | sed 's/^/  /'
 
   cmake --build "$NATIVE_GEN_DIR" \
@@ -180,6 +194,7 @@ build_desktop_static() {
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
         -DTD_ENABLE_JNI=OFF \
+        -DOPENSSL_USE_STATIC_LIBS=ON \
         "${extra_args[@]}" \
         2>&1 | sed 's/^/  /'
 
@@ -287,19 +302,22 @@ build_desktop_jni() {
     [[ -n "${CXXFLAGS:-}" ]] && compiler_args+=("-DCMAKE_CXX_FLAGS=${CXXFLAGS}")
   fi
 
-  # Single-pass: configure TDLib directly with JNI enabled, build tdjson shared library
+  # Build via root CMakeLists.txt with TD_ANDROID_JSON_JAVA=ON to produce
+  # the proper tdjni shared library (libtdjsonjava) with td_jni.cpp.
+  # TD_PACK_STATIC_DEPS=ON ensures OpenSSL/zlib are statically linked so
+  # the resulting .so/.dylib is portable.
   mkdir -p "$build_subdir"
-  cmake -S "$TD_DIR" \
+  cmake -S "$PROJECT_ROOT" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DTD_ENABLE_JNI=ON \
-        -DTD_ENABLE_LTO=OFF \
+        -DTD_ANDROID_JSON_JAVA=ON \
+        -DTD_PACK_STATIC_DEPS=ON \
         "${extra_args[@]}" \
         ${compiler_args[@]+"${compiler_args[@]}"} \
         2>&1 | sed 's/^/  /'
 
   cmake --build "$build_subdir" \
-        --target tdjson \
+        --target tdjni \
         --config Release \
         -j"$NPROC" \
         2>&1 | sed 's/^/  /'
@@ -308,11 +326,10 @@ build_desktop_jni() {
   mkdir -p "$out_dir/lib"
 
   if [[ "$os" == "macos" ]]; then
-    # Preserve symlinks for .dylib
-    cp -av "$build_subdir"/libtdjson*.dylib "$out_dir/lib/" 2>/dev/null || true
+    cp -av "$build_subdir"/libtdjsonjava*.dylib "$out_dir/lib/" 2>/dev/null || true
   else
     # Linux .so files
-    cp -av "$build_subdir"/libtdjson*.so* "$out_dir/lib/" 2>/dev/null || true
+    cp -av "$build_subdir"/libtdjsonjava*.so* "$out_dir/lib/" 2>/dev/null || true
   fi
 
   success "JNI build complete → $out_dir"
@@ -344,9 +361,7 @@ build_android_jni() {
   local toolchain_file="$NDK_ROOT/build/cmake/android.toolchain.cmake"
   [[ -f "$toolchain_file" ]] || error "NDK toolchain file not found: $toolchain_file"
 
-  # Map ABI to MIN_SDK_VERSION
   local min_sdk=21
-  [[ "$abi" == "armeabi-v7a" ]] && min_sdk=16
 
   prepare_cross_compiling
 

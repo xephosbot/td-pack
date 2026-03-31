@@ -72,6 +72,14 @@ switch ($Platform) {
     'windows-arm64' { $CmakeArch = 'ARM64';  $VcpkgArch = 'arm64'; $OutSuffix = 'arm64' }
 }
 
+# JNI builds use static-md triplet so OpenSSL/zlib are statically linked into
+# the shared library, making it portable.
+if ($Target -eq 'tdlib_jni') {
+    $VcpkgTriplet = "${VcpkgArch}-windows-static-md"
+} else {
+    $VcpkgTriplet = "${VcpkgArch}-windows"
+}
+
 # ── Detect parallelism ────────────────────────────────────────────────────────
 $Nproc = [Environment]::ProcessorCount
 if (-not $Nproc -or $Nproc -lt 1) { $Nproc = 4 }
@@ -105,11 +113,11 @@ $VcpkgExe      = Join-Path $VcpkgDir 'vcpkg.exe'
 $VcpkgToolchain = Join-Path $VcpkgDir 'scripts\buildsystems\vcpkg.cmake'
 
 # Install required packages
-Write-Info "Installing vcpkg packages for $VcpkgArch..."
+Write-Info "Installing vcpkg packages for $VcpkgTriplet..."
 $VcpkgPackages = @(
     "gperf:${VcpkgArch}-windows",
-    "openssl:${VcpkgArch}-windows",
-    "zlib:${VcpkgArch}-windows"
+    "openssl:${VcpkgTriplet}",
+    "zlib:${VcpkgTriplet}"
 )
 foreach ($pkg in $VcpkgPackages) {
     Invoke-Cmd $VcpkgExe @('install', $pkg, '--recurse')
@@ -157,8 +165,9 @@ function Build-Static {
         '-B', $BuildSub,
         "-DCMAKE_BUILD_TYPE=Release",
         '-DTD_ENABLE_JNI=OFF',
+        '-DOPENSSL_USE_STATIC_LIBS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
-        "-DVCPKG_TARGET_TRIPLET=${VcpkgArch}-windows"
+        "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet"
     )
 
     Invoke-Cmd cmake @(
@@ -204,32 +213,29 @@ function Build-Jni {
     $JavaHome = $JavaHome -replace '\\', '/'
     Write-Info "JAVA_HOME = $JavaHome"
 
-    # Build JNI include flags for Windows (requires include/win32 subdir)
-    $JavaInclude    = "$JavaHome/include"
-    $JavaIncludeWin = "$JavaHome/include/win32"
-
     Write-Banner "Building TDLib JNI — windows/$OutSuffix"
 
     New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
-    # Single-pass: configure TDLib directly with JNI enabled, build tdjson shared library
+    # Build via root CMakeLists.txt with TD_ANDROID_JSON_JAVA=ON to produce
+    # the proper tdjni shared library (tdjsonjava.dll) with td_jni.cpp.
+    # TD_PACK_STATIC_DEPS=ON ensures OpenSSL/zlib are statically linked so
+    # the resulting DLL is portable.
     Invoke-Cmd cmake @(
         '-A', $CmakeArch,
-        '-S', $TdDir,
+        '-S', $ProjectRoot,
         '-B', $BuildSub,
         '-DCMAKE_BUILD_TYPE=Release',
-        '-DTD_ENABLE_JNI=ON',
-        '-DTD_ENABLE_LTO=OFF',
+        '-DTD_ANDROID_JSON_JAVA=ON',
+        '-DTD_PACK_STATIC_DEPS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
-        "-DVCPKG_TARGET_TRIPLET=${VcpkgArch}-windows",
-        "-DJAVA_HOME=$JavaHome",
-        "-DJAVA_INCLUDE_PATH=$JavaInclude",
-        "-DJAVA_INCLUDE_PATH2=$JavaIncludeWin"
+        "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet",
+        "-DJAVA_HOME=$JavaHome"
     )
 
     Invoke-Cmd cmake @(
         '--build', $BuildSub,
-        '--target', 'tdjson',
+        '--target', 'tdjni',
         '--config', 'Release',
         '--parallel', "$Nproc"
     )
@@ -238,11 +244,11 @@ function Build-Jni {
     $OutLib = Join-Path $OutDir 'lib'
     New-Item -ItemType Directory -Force -Path $OutLib | Out-Null
 
-    # Copy tdjson.dll and tdjson.lib from build dir
-    Get-ChildItem -Path $BuildSub -Recurse -Filter 'tdjson.dll' | ForEach-Object {
+    # Copy tdjsonjava.dll and tdjsonjava.lib from build dir
+    Get-ChildItem -Path $BuildSub -Recurse -Filter 'tdjsonjava.dll' | ForEach-Object {
         Copy-Item $_.FullName -Destination $OutLib -Force -Verbose
     }
-    Get-ChildItem -Path $BuildSub -Recurse -Filter 'tdjson.lib' | ForEach-Object {
+    Get-ChildItem -Path $BuildSub -Recurse -Filter 'tdjsonjava.lib' | ForEach-Object {
         Copy-Item $_.FullName -Destination $OutLib -Force -Verbose
     }
 
