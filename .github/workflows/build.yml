@@ -78,7 +78,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -170,7 +170,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -257,7 +257,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       # Cache vcpkg installed packages (keyed on pinned commit — never changes)
       - name: Cache vcpkg packages
@@ -321,7 +321,6 @@ jobs:
         run: |
           # Derive numeric NDK version from the installed path (e.g. 26.1.10909125)
           NDK_VERSION=$(basename "${{ steps.setup-ndk.outputs.ndk-path }}")
-          mkdir -p third_party/openssl/android
           pushd td/example/android
           ./build-openssl.sh \
             "$ANDROID_HOME" \

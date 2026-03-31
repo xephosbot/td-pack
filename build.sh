@@ -181,7 +181,6 @@ build_desktop_static() {
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$out_dir" \
         -DTD_ENABLE_JNI=OFF \
-        -DTD_ENABLE_LTO=ON \
         "${extra_args[@]}" \
         2>&1 | sed 's/^/  /'
 
@@ -243,10 +242,23 @@ build_desktop_jni() {
   fi
 
   # Linux: respect CC/CXX/CXXFLAGS from environment (CI: clang-18 + -stdlib=libc++)
+  # If CC/CXX is "ccache <compiler>", split into launcher + compiler for CMake.
   local compiler_args=()
   if [[ "$os" == "linux" ]]; then
-    [[ -n "${CC:-}"       ]] && compiler_args+=("-DCMAKE_C_COMPILER=${CC}")
-    [[ -n "${CXX:-}"      ]] && compiler_args+=("-DCMAKE_CXX_COMPILER=${CXX}")
+    if [[ -n "${CC:-}" ]]; then
+      if [[ "${CC}" == ccache\ * ]]; then
+        compiler_args+=("-DCMAKE_C_COMPILER_LAUNCHER=ccache" "-DCMAKE_C_COMPILER=${CC#ccache }")
+      else
+        compiler_args+=("-DCMAKE_C_COMPILER=${CC}")
+      fi
+    fi
+    if [[ -n "${CXX:-}" ]]; then
+      if [[ "${CXX}" == ccache\ * ]]; then
+        compiler_args+=("-DCMAKE_CXX_COMPILER_LAUNCHER=ccache" "-DCMAKE_CXX_COMPILER=${CXX#ccache }")
+      else
+        compiler_args+=("-DCMAKE_CXX_COMPILER=${CXX}")
+      fi
+    fi
     [[ -n "${CXXFLAGS:-}" ]] && compiler_args+=("-DCMAKE_CXX_FLAGS=${CXXFLAGS}")
   fi
 
@@ -257,9 +269,8 @@ build_desktop_jni() {
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$step1_install" \
         -DTD_ENABLE_JNI=ON \
-        -DTD_ENABLE_LTO=ON \
         "${extra_args[@]}" \
-        "${compiler_args[@]}" \
+        ${compiler_args[@]+"${compiler_args[@]}"} \
         2>&1 | sed 's/^/  /'
 
   cmake --build "$step1_build" \
@@ -278,7 +289,7 @@ build_desktop_jni() {
         -DCMAKE_INSTALL_PREFIX="$out_dir" \
         -DTd_DIR="${step1_install}/lib/cmake/Td" \
         "${extra_args[@]}" \
-        "${compiler_args[@]}" \
+        ${compiler_args[@]+"${compiler_args[@]}"} \
         2>&1 | sed 's/^/  /'
 
   cmake --build "$step2_build" \
@@ -404,7 +415,6 @@ build_ios_static() {
         -DIOS_PLATFORM="$ios_platform" \
         -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \
         -DTD_ENABLE_JNI=OFF \
-        -DTD_ENABLE_LTO=ON \
         -DOPENSSL_ROOT_DIR="$openssl_plat_dir" \
         -DNATIVE_GEN_DIR="$NATIVE_GEN_DIR" \
         2>&1 | sed 's/^/  /'

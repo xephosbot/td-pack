@@ -1,18 +1,31 @@
 #!/usr/bin/env bash
 # =============================================================================
 # scripts/build-openssl-ios.sh
-# Wraps td/example/ios/build-openssl.sh to produce OpenSSL static libs for
-# all three iOS targets, then organises them under:
-#   third_party/openssl/ios/{OS64,SIMULATORARM64,SIMULATOR64}/
+# Builds OpenSSL 3.1.5 static libraries for all iOS targets, then places them
+# under:
+#   third_party/openssl/ios/OS64/           — device arm64
+#   third_party/openssl/ios/SIMULATORARM64/ — simulator arm64
+#   third_party/openssl/ios/SIMULATOR64/    — simulator x86_64
+#
+# Does NOT use td/example/ios/build-openssl.sh (which relies on
+# Python-Apple-support and generates invalid target triples on Xcode 16).
+# Instead, OpenSSL is configured directly using darwin64-* targets with
+# explicit -target flags so the correct triple is always used.
 # =============================================================================
 # Usage:
 #   ./scripts/build-openssl-ios.sh
 #
 # No arguments required. Run from any directory.
-# Requires: Xcode command-line tools, cmake, make
+# Requires: Xcode command-line tools, make, perl
 # =============================================================================
 
 set -euo pipefail
+
+# ── Config ────────────────────────────────────────────────────────────────────
+OPENSSL_VERSION="3.1.5"
+OPENSSL_URL="https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
+IOS_MIN_VERSION="12.0"
+SIM_MIN_VERSION="12.0"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -27,136 +40,146 @@ success() { echo -e "${GREEN}${BOLD}[OK]${NC}    $*"; }
 warn()    { echo -e "${YELLOW}${BOLD}[WARN]${NC}  $*"; }
 error()   { echo -e "${RED}${BOLD}[ERROR]${NC} $*" >&2; exit 1; }
 banner()  { echo -e "\n${BOLD}${CYAN}══════════════════════════════════════════════════════${NC}"; \
-             echo -e "${BOLD}${CYAN}  $*${NC}"; \
-             echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════${NC}"; }
+            echo -e "${BOLD}${CYAN}  $*${NC}"; \
+            echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════${NC}"; }
 
 # ── Resolve project root ───────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
 OUTPUT_DIR="$PROJECT_ROOT/third_party/openssl/ios"
+BUILD_TMP="/tmp/openssl-ios-$$"
 
 # ── Platform check ────────────────────────────────────────────────────────────
 if [[ "$(uname)" != "Darwin" ]]; then
   error "iOS builds require macOS. Current OS: $(uname)"
 fi
 
-# ── Validate upstream build script ───────────────────────────────────────────
-UPSTREAM_SCRIPT="$PROJECT_ROOT/td/example/ios/build-openssl.sh"
-if [[ ! -f "$UPSTREAM_SCRIPT" ]]; then
-  error "Upstream build script not found: $UPSTREAM_SCRIPT\n" \
-        "Make sure the TDLib submodule is initialised:\n  git submodule update --init --depth=1 td"
-fi
-if [[ ! -x "$UPSTREAM_SCRIPT" ]]; then
-  chmod +x "$UPSTREAM_SCRIPT"
-fi
-
-# ── Xcode check ──────────────────────────────────────────────────────────────
 if ! command -v xcrun &>/dev/null; then
   error "xcrun not found. Install Xcode command-line tools: xcode-select --install"
 fi
 
-banner "Building OpenSSL for iOS (all platforms)"
-info "Output dir : $OUTPUT_DIR"
+# ── Obtain OpenSSL source ─────────────────────────────────────────────────────
+download_openssl() {
+  local tarball="$BUILD_TMP/openssl-${OPENSSL_VERSION}.tar.gz"
+  mkdir -p "$BUILD_TMP"
 
-# ── Run upstream script ───────────────────────────────────────────────────────
-# The TDLib ios/build-openssl.sh typically places its output inside
-# td/example/ios/third_party/openssl/ organised by IOS_PLATFORM name.
-# We run it from its own directory as it expects relative paths.
-
-UPSTREAM_BUILD_DIR="$PROJECT_ROOT/td/example/ios"
-
-banner "Running TDLib ios/build-openssl.sh"
-
-pushd "$UPSTREAM_BUILD_DIR" > /dev/null
-./build-openssl.sh 2>&1 | sed 's/^/  /'
-popd > /dev/null
-
-# ── Locate and organise outputs ───────────────────────────────────────────────
-# The upstream script may put outputs in several places depending on TDLib version.
-# Common layouts:
-#   td/example/ios/third_party/openssl/{OS64,SIMULATORARM64,SIMULATOR64}/
-#   td/example/ios/openssl/{OS64,SIMULATORARM64,SIMULATOR64}/
-# We search for known subdirectory names and copy/link them.
-
-PLATFORMS=(OS64 SIMULATORARM64 SIMULATOR64)
-
-banner "Organising OpenSSL outputs under third_party/openssl/ios/"
-mkdir -p "$OUTPUT_DIR"
-
-# Search candidate source directories (order: preferred first)
-CANDIDATE_ROOTS=(
-  "$UPSTREAM_BUILD_DIR/third_party/openssl"
-  "$UPSTREAM_BUILD_DIR/openssl"
-  "$PROJECT_ROOT/td/example/ios/third_party/openssl"
-)
-
-find_platform_dir() {
-  local plat="$1"
-  for root in "${CANDIDATE_ROOTS[@]}"; do
-    local candidate="$root/$plat"
-    if [[ -d "$candidate" ]]; then
-      echo "$candidate"
-      return 0
-    fi
-  done
-  # Fallback: deep search under td/example/ios
-  local found
-  found=$(find "$UPSTREAM_BUILD_DIR" -maxdepth 5 -type d -name "$plat" 2>/dev/null | head -1)
-  if [[ -n "$found" ]]; then
-    echo "$found"
+  if [[ -f "$tarball" ]]; then
+    info "Using cached tarball: $tarball"
     return 0
   fi
-  return 1
+
+  info "Downloading OpenSSL $OPENSSL_VERSION …"
+  if command -v curl &>/dev/null; then
+    curl -fsSL "$OPENSSL_URL" -o "$tarball"
+  elif command -v wget &>/dev/null; then
+    wget -q "$OPENSSL_URL" -O "$tarball"
+  else
+    error "curl or wget required to download OpenSSL"
+  fi
+  success "Downloaded OpenSSL $OPENSSL_VERSION"
 }
 
-all_ok=true
-for plat in "${PLATFORMS[@]}"; do
-  dest="$OUTPUT_DIR/$plat"
+extract_openssl() {
+  local src_dir="$BUILD_TMP/src"
+  if [[ -d "$src_dir/openssl-${OPENSSL_VERSION}" ]]; then
+    return 0
+  fi
+  mkdir -p "$src_dir"
+  info "Extracting OpenSSL …"
+  tar -xzf "$BUILD_TMP/openssl-${OPENSSL_VERSION}.tar.gz" -C "$src_dir"
+}
 
-  # Skip if already in place
-  if [[ -d "$dest" ]]; then
-    if find "$dest" -name "*.a" -print -quit 2>/dev/null | grep -q .; then
-      info "Platform $plat already present at $dest, skipping copy"
-      success "Platform $plat → $dest"
-      continue
-    fi
+# ── Build one iOS target ───────────────────────────────────────────────────────
+# build_target <platform_name> <arch> <sdk> <is_simulator> <openssl_target>
+build_target() {
+  local platform_name="$1"   # OS64 | SIMULATORARM64 | SIMULATOR64
+  local arch="$2"             # arm64 | x86_64
+  local sdk="$3"              # iphoneos | iphonesimulator
+  local is_sim="$4"           # true | false
+  local openssl_target="$5"   # darwin64-arm64-cc | darwin64-x86_64-cc
+
+  local out_dir="$OUTPUT_DIR/$platform_name"
+
+  # Skip if already built
+  if [[ -d "$out_dir/include" ]] && find "$out_dir/lib" -name "libssl.a" -quit 2>/dev/null | grep -q .; then
+    info "OpenSSL for $platform_name already present, skipping"
+    success "Platform $platform_name → $out_dir"
+    return 0
   fi
 
-  src=$(find_platform_dir "$plat") || true
-  if [[ -z "$src" || ! -d "$src" ]]; then
-    warn "Could not locate OpenSSL output for platform: $plat"
-    warn "Searched candidate roots:"
-    for root in "${CANDIDATE_ROOTS[@]}"; do
-      warn "  $root/$plat"
-    done
-    all_ok=false
-    continue
-  fi
+  banner "Building OpenSSL ${OPENSSL_VERSION} for iOS/${platform_name} (${arch})"
 
-  info "Copying $plat: $src → $dest"
-  mkdir -p "$dest"
-  # Use rsync when available for speed; fall back to cp -R
-  if command -v rsync &>/dev/null; then
-    rsync -a --delete "$src/" "$dest/" 2>&1 | sed 's/^/  /'
+  local sdk_path
+  sdk_path=$(xcrun --sdk "$sdk" --show-sdk-path)
+  local clang
+  clang=$(xcrun --sdk "$sdk" --find clang)
+
+  # Build explicit -target triple to avoid double-simulator from iossimulator-xcrun
+  local target_triple
+  if [[ "$is_sim" == "true" ]]; then
+    target_triple="${arch}-apple-ios${SIM_MIN_VERSION}-simulator"
   else
-    cp -R "$src/." "$dest/"
+    target_triple="${arch}-apple-ios${IOS_MIN_VERSION}"
   fi
 
-  # Verify at least one .a file was copied
-  if find "$dest" -name "*.a" -print -quit 2>/dev/null | grep -q .; then
-    success "Platform $plat → $dest"
+  # Min-version flag for the linker / crt selection
+  local min_flag
+  if [[ "$is_sim" == "true" ]]; then
+    min_flag="-mios-simulator-version-min=${SIM_MIN_VERSION}"
   else
-    warn "Platform $plat directory exists but contains no .a files: $dest"
-    all_ok=false
+    min_flag="-miphoneos-version-min=${IOS_MIN_VERSION}"
   fi
-done
 
-if $all_ok; then
-  success "All iOS platforms built and organised successfully"
-else
-  error "One or more iOS platform builds are incomplete. Check the output above."
-fi
+  local build_dir="$BUILD_TMP/build-$platform_name"
+  rm -rf "$build_dir"
+  mkdir -p "$build_dir"
+  cp -R "$BUILD_TMP/src/openssl-${OPENSSL_VERSION}/." "$build_dir/"
+
+  mkdir -p "$out_dir"
+
+  (
+    cd "$build_dir"
+
+    # Override CC and CFLAGS so OpenSSL uses the correct target triple.
+    # Using the darwin64-* configure targets (not ios64-cross / iossimulator-xcrun)
+    # avoids the CROSS_COMPILE mechanism that appends an extra -simulator suffix.
+    export CC="$clang"
+    export CFLAGS="-arch $arch -target $target_triple -isysroot $sdk_path $min_flag"
+    export CXXFLAGS="$CFLAGS"
+    export LDFLAGS="-arch $arch -target $target_triple -isysroot $sdk_path $min_flag"
+
+    ./Configure "$openssl_target" \
+      --prefix="$out_dir" \
+      no-shared \
+      no-tests \
+      no-dso \
+      no-engine \
+      no-comp \
+      no-hw \
+      no-async \
+      2>&1 | sed 's/^/  /'
+
+    make -j"$(sysctl -n hw.logicalcpu)" install_sw 2>&1 | sed 's/^/  /'
+  )
+
+  success "Platform $platform_name → $out_dir"
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+banner "Building OpenSSL ${OPENSSL_VERSION} for iOS (all platforms)"
+info "Output dir: $OUTPUT_DIR"
+
+download_openssl
+extract_openssl
+
+# ┌─ Platform       ─ arch   ─ sdk               ─ sim   ─ openssl target ─────┐
+build_target  OS64           arm64   iphoneos        false  darwin64-arm64-cc
+build_target  SIMULATORARM64 arm64   iphonesimulator true   darwin64-arm64-cc
+build_target  SIMULATOR64    x86_64  iphonesimulator true   darwin64-x86_64-cc
+
+# Clean up temp build trees (keep the tarball for potential re-use)
+rm -rf "$BUILD_TMP/build-"* "$BUILD_TMP/src" 2>/dev/null || true
 
 banner "OpenSSL for iOS — done"
 info "Outputs: $OUTPUT_DIR/{OS64,SIMULATORARM64,SIMULATOR64}/"
+success "All iOS platforms built successfully"
