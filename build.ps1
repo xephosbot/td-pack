@@ -84,7 +84,8 @@ Write-Ok 'Submodule ready'
 # ── Step 2: Setup vcpkg ───────────────────────────────────────────────────────
 Write-Banner 'Setting up vcpkg'
 
-if (-not (Test-Path $VcpkgDir)) {
+if (-not (Test-Path (Join-Path $VcpkgDir '.git'))) {
+    if (Test-Path $VcpkgDir) { Remove-Item -Recurse -Force $VcpkgDir }
     Write-Info "Cloning vcpkg..."
     Invoke-Cmd git @('clone', 'https://github.com/microsoft/vcpkg.git', $VcpkgDir)
 }
@@ -155,7 +156,6 @@ function Build-Static {
         '-S', $TdDir,
         '-B', $BuildSub,
         "-DCMAKE_BUILD_TYPE=Release",
-        "-DCMAKE_INSTALL_PREFIX=$OutDir",
         '-DTD_ENABLE_JNI=OFF',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=${VcpkgArch}-windows"
@@ -163,19 +163,36 @@ function Build-Static {
 
     Invoke-Cmd cmake @(
         '--build', $BuildSub,
-        '--target', 'install',
+        '--target', 'tdjson_static',
         '--config', 'Release',
         '--parallel', "$Nproc"
     )
+
+    # Manual copy of artifacts
+    $OutLib = Join-Path $OutDir 'lib'
+    $OutInc = Join-Path $OutDir 'include\td\telegram'
+    New-Item -ItemType Directory -Force -Path $OutLib | Out-Null
+    New-Item -ItemType Directory -Force -Path $OutInc | Out-Null
+
+    # Copy .lib files from build dir (Release config subdir on MSVC)
+    Get-ChildItem -Path $BuildSub -Recurse -Filter '*.lib' | ForEach-Object {
+        Copy-Item $_.FullName -Destination $OutLib -Force -Verbose
+    }
+
+    # Copy specific headers
+    $ExportHeader = Join-Path $BuildSub 'td\telegram\tdjson_export.h'
+    if (Test-Path $ExportHeader) { Copy-Item $ExportHeader -Destination $OutInc -Force -Verbose }
+    $JsonClientH = Join-Path $TdDir 'td\telegram\td_json_client.h'
+    if (Test-Path $JsonClientH) { Copy-Item $JsonClientH -Destination (Join-Path $OutDir 'include') -Force -Verbose }
+    $LogH = Join-Path $TdDir 'td\telegram\td_log.h'
+    if (Test-Path $LogH) { Copy-Item $LogH -Destination (Join-Path $OutDir 'include') -Force -Verbose }
 
     Write-Ok "Static build complete -> $OutDir"
 }
 
 function Build-Jni {
-    $Step1Build   = Join-Path $BuildDir "windows-jni-step1-$OutSuffix"
-    $Step1Install = Join-Path $Step1Build 'install'
-    $Step2Build   = Join-Path $BuildDir "windows-jni-step2-$OutSuffix"
-    $OutDir       = Join-Path $ProjectRoot "out\windows-jni\$OutSuffix"
+    $BuildSub = Join-Path $BuildDir "windows-jni-$OutSuffix"
+    $OutDir   = Join-Path $ProjectRoot "out\windows-jni\$OutSuffix"
 
     # Resolve JAVA_HOME
     $JavaHome = $env:JAVA_HOME
@@ -191,17 +208,18 @@ function Build-Jni {
     $JavaInclude    = "$JavaHome/include"
     $JavaIncludeWin = "$JavaHome/include/win32"
 
-    Write-Banner "Building TDLib JNI — windows/$OutSuffix (pass 1: TDLib)"
+    Write-Banner "Building TDLib JNI — windows/$OutSuffix"
 
-    New-Item -ItemType Directory -Force -Path $Step1Build | Out-Null
+    New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
+    # Single-pass: configure TDLib directly with JNI enabled, build tdjson shared library
     Invoke-Cmd cmake @(
         '-A', $CmakeArch,
         '-S', $TdDir,
-        '-B', $Step1Build,
+        '-B', $BuildSub,
         '-DCMAKE_BUILD_TYPE=Release',
-        "-DCMAKE_INSTALL_PREFIX=$Step1Install",
         '-DTD_ENABLE_JNI=ON',
+        '-DTD_ENABLE_LTO=OFF',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=${VcpkgArch}-windows",
         "-DJAVA_HOME=$JavaHome",
@@ -210,37 +228,23 @@ function Build-Jni {
     )
 
     Invoke-Cmd cmake @(
-        '--build', $Step1Build,
-        '--target', 'install',
+        '--build', $BuildSub,
+        '--target', 'tdjson',
         '--config', 'Release',
         '--parallel', "$Nproc"
     )
 
-    Write-Banner "Building TDLib JNI — windows/$OutSuffix (pass 2: tdjni wrapper)"
+    # Manual copy of shared library
+    $OutLib = Join-Path $OutDir 'lib'
+    New-Item -ItemType Directory -Force -Path $OutLib | Out-Null
 
-    $TdCmakeDir = ($Step1Install + '/lib/cmake/Td') -replace '\\', '/'
-    New-Item -ItemType Directory -Force -Path $Step2Build | Out-Null
-
-    Invoke-Cmd cmake @(
-        '-A', $CmakeArch,
-        '-S', $ProjectRoot,
-        '-B', $Step2Build,
-        '-DCMAKE_BUILD_TYPE=Release',
-        "-DCMAKE_INSTALL_PREFIX=$OutDir",
-        "-DTd_DIR=$TdCmakeDir",
-        "-DJAVA_HOME=$JavaHome",
-        "-DJAVA_INCLUDE_PATH=$JavaInclude",
-        "-DJAVA_INCLUDE_PATH2=$JavaIncludeWin",
-        "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
-        "-DVCPKG_TARGET_TRIPLET=${VcpkgArch}-windows"
-    )
-
-    Invoke-Cmd cmake @(
-        '--build', $Step2Build,
-        '--target', 'install',
-        '--config', 'Release',
-        '--parallel', "$Nproc"
-    )
+    # Copy tdjson.dll and tdjson.lib from build dir
+    Get-ChildItem -Path $BuildSub -Recurse -Filter 'tdjson.dll' | ForEach-Object {
+        Copy-Item $_.FullName -Destination $OutLib -Force -Verbose
+    }
+    Get-ChildItem -Path $BuildSub -Recurse -Filter 'tdjson.lib' | ForEach-Object {
+        Copy-Item $_.FullName -Destination $OutLib -Force -Verbose
+    }
 
     Write-Ok "JNI build complete -> $OutDir"
 }
