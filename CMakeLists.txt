@@ -10,8 +10,10 @@ find_package(Td REQUIRED)
 
 option(TD_PACK_STATIC_DEPS "Prefer static libraries for dependencies (used by JNI builds)" OFF)
 
-# When building JNI shared libraries we need OpenSSL/zlib statically linked
+# When building JNI shared libraries we need OpenSSL statically linked
 # inside the .so/.dylib so the result is portable.
+# On macOS/Linux zlib ships with the OS so we link it dynamically.
+# On Windows neither OpenSSL nor zlib are present, so both are static.
 if (TD_PACK_STATIC_DEPS)
   set(OPENSSL_USE_STATIC_LIBS ON)
   set(_td_pack_save_suffixes ${CMAKE_FIND_LIBRARY_SUFFIXES})
@@ -24,6 +26,16 @@ endif()
 
 # Conan-provided dependencies
 find_package(OpenSSL REQUIRED)
+
+if (TD_PACK_STATIC_DEPS)
+  if (WIN32)
+    # Windows: keep static suffixes for zlib as well
+  else()
+    # macOS/Linux: restore default suffixes so zlib is found dynamically
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ${_td_pack_save_suffixes})
+  endif()
+endif()
+
 find_package(ZLIB REQUIRED)
 
 if (TD_PACK_STATIC_DEPS)
