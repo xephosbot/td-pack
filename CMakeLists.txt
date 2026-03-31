@@ -125,7 +125,7 @@ if (TD_ANDROID_JSON)
   return()
 endif()
 
-set(TD_JNI_PACKAGE_NAME "org/drinkless/tdlib" CACHE STRING "JNI package name (e.g. io/xbot/tdlib)")
+set(TD_JNI_PACKAGE_NAME "io/xbot/tdlib" CACHE STRING "JNI package name")
 
 if (TD_ANDROID_JSON_JAVA)
   set(TD_ENABLE_JNI ON CACHE BOOL "Enable JNI-compatible TDLib API" FORCE)
