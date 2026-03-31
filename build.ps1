@@ -219,8 +219,8 @@ function Build-Jni {
 
     # Build via root CMakeLists.txt with TD_ANDROID_JSON_JAVA=ON to produce
     # the proper tdjni shared library (tdjsonjava.dll) with td_jni.cpp.
-    # TD_PACK_STATIC_DEPS=ON ensures OpenSSL/zlib are statically linked so
-    # the resulting DLL is portable.
+    # TD_PACK_STATIC_DEPS=ON ensures OpenSSL and zlib are statically linked so
+    # the resulting DLL is portable (Windows does not ship either library).
     Invoke-Cmd cmake @(
         '-A', $CmakeArch,
         '-S', $ProjectRoot,
