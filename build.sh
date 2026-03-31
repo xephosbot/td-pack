@@ -304,8 +304,8 @@ build_desktop_jni() {
 
   # Build via root CMakeLists.txt with TD_ANDROID_JSON_JAVA=ON to produce
   # the proper tdjni shared library (libtdjsonjava) with td_jni.cpp.
-  # TD_PACK_STATIC_DEPS=ON ensures OpenSSL/zlib are statically linked so
-  # the resulting .so/.dylib is portable.
+  # TD_PACK_STATIC_DEPS=ON ensures OpenSSL is statically linked so
+  # the resulting .so/.dylib is portable (zlib is system-provided on macOS/Linux).
   mkdir -p "$build_subdir"
   cmake -S "$PROJECT_ROOT" \
         -B "$build_subdir" \
@@ -395,19 +395,22 @@ build_android_jni() {
 build_ios_static() {
   local arch_variant="$1"  # arm64 | arm64-simulator | x86_64-simulator
 
-  local ios_platform out_dir build_subdir cmake_arch
+  local ios_platform openssl_platform out_dir build_subdir cmake_arch
 
   case "$arch_variant" in
     arm64)
-      ios_platform="OS64"
+      ios_platform="OS"
+      openssl_platform="OS64"
       cmake_arch="arm64"
       ;;
     arm64-simulator)
-      ios_platform="SIMULATORARM64"
+      ios_platform="SIMULATOR"
+      openssl_platform="SIMULATORARM64"
       cmake_arch="arm64"
       ;;
     x86_64-simulator)
-      ios_platform="SIMULATOR64"
+      ios_platform="SIMULATOR"
+      openssl_platform="SIMULATOR64"
       cmake_arch="x86_64"
       ;;
     *)
@@ -419,10 +422,10 @@ build_ios_static() {
   build_subdir="$BUILD_DIR/ios-static-${arch_variant}"
 
   local openssl_ios_dir="$PROJECT_ROOT/third_party/openssl/ios"
-  local openssl_plat_dir="$openssl_ios_dir/${ios_platform}"
+  local openssl_plat_dir="$openssl_ios_dir/${openssl_platform}"
 
   if [[ ! -d "$openssl_plat_dir" ]]; then
-    error "OpenSSL for iOS/${ios_platform} not found at $openssl_plat_dir.\n" \
+    error "OpenSSL for iOS/${openssl_platform} not found at $openssl_plat_dir.\n" \
           "Run: ./scripts/build-openssl-ios.sh first."
   fi
 
