@@ -1,3 +1,14 @@
+--- a/example/android/CMakeLists.txt
++++ b/example/android/CMakeLists.txt
+@@ -39,7 +39,7 @@
+   else()
+     target_link_libraries(tdjni PRIVATE Td::TdStatic)
+   endif()
+-  target_compile_definitions(tdjni PRIVATE PACKAGE_NAME="org/drinkless/tdlib")
++  target_compile_definitions(tdjni PRIVATE PACKAGE_NAME="io/xbot/tdlib")
+ 
+   add_custom_command(TARGET tdjni POST_BUILD
+     COMMAND ${CMAKE_COMMAND} -E rename $<TARGET_FILE:tdjni> $<TARGET_FILE:tdjni>.debug
 --- a/example/java/td_jni.cpp
 +++ b/example/java/td_jni.cpp
 @@ -187,14 +187,12 @@ static jint register_native(JavaVM *vm) {
