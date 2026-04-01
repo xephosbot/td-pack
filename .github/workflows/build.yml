@@ -29,6 +29,20 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "TDLib version: $VERSION"
 
+      - name: Prepare versioned td_api.tl
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          mkdir -p td-api-schema
+          cp td/td/generate/scheme/td_api.tl "td-api-schema/td-api-v${VERSION}.tl"
+          echo "Created td-api-v${VERSION}.tl"
+
+      - name: Upload td_api schema
+        uses: actions/upload-artifact@v4
+        with:
+          name: td-api-schema
+          path: td-api-schema/
+          if-no-files-found: error
+
   # ─────────────────────────────────────────────────────────────────────────────
   #  macOS  (arm64 + x86_64) × (static + JNI) = 4 builds
   #  Runners:  macos-15       → Apple Silicon (arm64)
@@ -472,6 +486,11 @@ jobs:
           echo "Total packages: $(ls release/*.tar.gz | wc -l)"
           ls -lh release/
 
+      - name: Copy td_api schema to release
+        run: |
+          cp artifacts/td-api-schema/*.tl release/
+          echo "  ✓ $(ls release/*.tl)"
+
       - name: Verify all 19 packages present
         run: |
           EXPECTED=(
@@ -501,6 +520,15 @@ jobs:
           fi
           echo ""
           echo "All 19 packages verified."
+
+          # Verify td_api schema
+          SCHEMA="td-api-v${{ needs.version.outputs.tdlib_version }}.tl"
+          if [[ -f "release/${SCHEMA}" ]]; then
+            echo "  ✓ ${SCHEMA}"
+          else
+            echo "  ✗ MISSING: ${SCHEMA}"
+            exit 1
+          fi
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -558,7 +586,15 @@ jobs:
             **JNI desktop** (`lib/libtdjsonjava.{so,dylib}` or `lib/tdjsonjava.dll`)
 
             **JNI Android** (`libtdjsonjava.so` — flat, no headers)
-          files: release/*.tar.gz
+
+            ### TL Schema
+
+            | Asset | Description |
+            |---|---|
+            | `td-api-v${{ needs.version.outputs.tdlib_version }}.tl` | TDLib public API schema |
+          files: |
+            release/*.tar.gz
+            release/*.tl
           draft: false
           prerelease: false
           make_latest: true
