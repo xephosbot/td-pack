@@ -208,6 +208,10 @@ function Build-Jni {
     if (-not $JavaHome -or -not (Test-Path $JavaHome)) {
         Write-Fail "JAVA_HOME is not set or does not exist. Set it to a JDK installation (e.g. C:\Program Files\Eclipse Adoptium\jdk-21)."
     }
+    # CMake's FindJNI.cmake passes JAVA_HOME into a foreach() which treats
+    # backslashes as escape characters (e.g. \h in \hostedtoolcache → error).
+    # Convert to forward slashes so CMake parses the path correctly.
+    $JavaHome = $JavaHome -replace '\\', '/'
     Write-Info "JAVA_HOME = $JavaHome"
 
     Write-Banner "Building TDLib JNI — windows/$OutSuffix"
