@@ -4,16 +4,6 @@ Prebuilt [TDLib](https://github.com/tdlib/td) libraries for all major platforms.
 
 ## How it works
 
-Everything is built via **GitHub Actions** — no Conan, no Bazel, no third-party build systems. Just CMake and shell scripts.
-
-Push a tag `v*.*.*` (or trigger the workflow manually) and CI builds libraries for every supported platform and uploads them as release artifacts.
-
-## Fork it
-
-1. Fork the repository
-2. Adjust patches, platforms, or settings in `.github/workflows/build.yml` if needed
-3. Push a tag or run the workflow manually — artifacts will appear in the Actions output
-
 The entire build runs in CI; nothing needs to be installed locally to get the binaries.
 
 ## Supported platforms
@@ -46,11 +36,27 @@ You can also build locally using the included scripts.
 ./build.sh <target> <platform>
 ```
 
-**Windows (PowerShell):**
+**Windows (on Windows host only):**
 
 ```powershell
 .\build.ps1 -Target <target> -Platform <platform>
 ```
+
+### Targets and platforms
+
+| Platform | Targets |
+|----------|---------|
+| `macos-arm64` | tdlib, tdlib_jni |
+| `macos-x86_64` | tdlib, tdlib_jni |
+| `linux-x86_64` | tdlib, tdlib_jni |
+| `linux-arm64` | tdlib, tdlib_jni |
+| `windows-x64` | tdlib, tdlib_jni |
+| `windows-arm64` | tdlib, tdlib_jni |
+| `android-arm64-v8a` | tdlib_jni |
+| `android-armeabi-v7a` | tdlib_jni |
+| `android-x86_64` | tdlib_jni |
+| `android-x86` | tdlib_jni |
+| `ios-arm64` | tdlib |
 
 ### Prerequisites
 
@@ -82,22 +88,6 @@ You can also build locally using the included scripts.
 **iOS (`ios-*`):**
 - Xcode
 - Pre-built OpenSSL for iOS at `third_party/openssl/ios/<platform>/` — build it with `./scripts/build-openssl-ios.sh`
-
-### Targets and platforms
-
-| Platform | Targets |
-|----------|---------|
-| `macos-arm64` | tdlib, tdlib_jni |
-| `macos-x86_64` | tdlib, tdlib_jni |
-| `linux-x86_64` | tdlib, tdlib_jni |
-| `linux-arm64` | tdlib, tdlib_jni |
-| `windows-x64` | tdlib, tdlib_jni |
-| `windows-arm64` | tdlib, tdlib_jni |
-| `android-arm64-v8a` | tdlib_jni |
-| `android-armeabi-v7a` | tdlib_jni |
-| `android-x86_64` | tdlib_jni |
-| `android-x86` | tdlib_jni |
-| `ios-arm64` | tdlib |
 | `ios-arm64-simulator` | tdlib |
 | `ios-x86_64-simulator` | tdlib |
 
