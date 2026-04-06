@@ -436,7 +436,7 @@ build_ios_static() {
         -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \
         -DCMAKE_MAKE_PROGRAM="$host_make" \
         -DTD_ENABLE_JNI=OFF \
-        -DTD_ENABLE_LTO=ON \
+        -DTD_ENABLE_LTO=OFF \
         -DOPENSSL_ROOT_DIR="$openssl_plat_dir" \
         -DOPENSSL_CRYPTO_LIBRARY="$openssl_plat_dir/lib/libcrypto.a" \
         -DOPENSSL_SSL_LIBRARY="$openssl_plat_dir/lib/libssl.a" \
