@@ -1,53 +1,108 @@
 # td-pack
 
-Готовые сборки [TDLib](https://github.com/tdlib/td) под все основные платформы.
+Prebuilt [TDLib](https://github.com/tdlib/td) libraries for all major platforms.
 
-## Как это работает
+## How it works
 
-Вся сборка полностью автоматизирована через **GitHub Actions**. Никаких Conan, Bazel и прочих менеджеров зависимостей — только CMake и shell-скрипты.
+Everything is built via **GitHub Actions** — no Conan, no Bazel, no third-party build systems. Just CMake and shell scripts.
 
-При пуше тега `v*.*.*` (или ручном запуске workflow) CI собирает библиотеки под все платформы и выкладывает артефакты в релиз.
+Push a tag `v*.*.*` (or trigger the workflow manually) and CI builds libraries for every supported platform and uploads them as release artifacts.
 
-## Форк для своих нужд
+## Fork it
 
-1. Сделайте форк репозитория
-2. При необходимости измените патчи, настройки или платформы в `.github/workflows/build.yml`
-3. Запустите workflow вручную или создайте тег — готовые библиотеки появятся в артефактах
+1. Fork the repository
+2. Adjust patches, platforms, or settings in `.github/workflows/build.yml` if needed
+3. Push a tag or run the workflow manually — artifacts will appear in the Actions output
 
-Сборка работает полностью в CI, локально ничего ставить не нужно.
+The entire build runs in CI; nothing needs to be installed locally to get the binaries.
 
-## Поддерживаемые платформы
+## Supported platforms
 
-### Статические библиотеки (Kotlin/Native, C/C++)
+### Static libraries (Kotlin/Native, C/C++)
 
-| Платформа | Архитектуры |
-|-----------|------------|
+| Platform | Architectures |
+|----------|--------------|
 | iOS | arm64, arm64-simulator, x86_64-simulator |
 | macOS | arm64, x86_64 |
 | Linux | x86_64, arm64 |
 | Windows | x64, arm64 |
 
-### JNI shared-библиотеки (JVM / Android)
+### JNI shared libraries (JVM / Android)
 
-| Платформа | Архитектуры |
-|-----------|------------|
+| Platform | Architectures |
+|----------|--------------|
 | Android | arm64-v8a, armeabi-v7a, x86_64, x86 |
 | macOS | arm64, x86_64 |
 | Linux | x86_64, arm64 |
 | Windows | x64, arm64 |
 
-## Структура проекта
+## Local build
 
-```
-├── CMakeLists.txt          # CMake-обёртка для JNI (использует td/ через add_subdirectory)
-├── build.sh                # Скрипт сборки для Unix
-├── build.ps1               # Скрипт сборки для Windows
-├── scripts/                # Вспомогательные скрипты (сборка OpenSSL для iOS и т.д.)
-├── patches/                # Патчи к исходникам TDLib
-├── td/                     # Субмодуль TDLib
-└── .github/workflows/      # CI-конфигурация (GitHub Actions)
+You can also build locally using the included scripts.
+
+**Unix (macOS / Linux / Android / iOS):**
+
+```bash
+./build.sh <target> <platform>
 ```
 
-## Лицензия
+**Windows (PowerShell):**
 
-TDLib лицензирован на условиях Boost Software License. См. [LICENSE_1_0.txt](https://github.com/tdlib/td/blob/master/LICENSE_1_0.txt).
+```powershell
+.\build.ps1 -Target <target> -Platform <platform>
+```
+
+### Prerequisites
+
+**All platforms:**
+- [CMake](https://cmake.org) ≥ 3.19
+- [OpenSSL](https://www.openssl.org) (static libraries and headers)
+- `gperf`
+- C/C++ toolchain (GCC, Clang, or MSVC)
+
+**macOS:**
+- Xcode (provides the compiler, SDK, and `make`)
+- OpenSSL via Homebrew (`brew install openssl`)
+
+**Linux:**
+- OpenSSL dev package (`apt install libssl-dev` or equivalent)
+- `make`
+
+**Windows:**
+- Visual Studio 2022
+- The build script (`build.ps1`) automatically sets up [vcpkg](https://github.com/microsoft/vcpkg) and installs OpenSSL, zlib, and gperf through it
+
+**JNI targets (`tdlib_jni`):**
+- JDK with `JAVA_HOME` set
+
+**Android (`android-*`):**
+- Android NDK (set `ANDROID_NDK_ROOT` or `ANDROID_NDK`)
+- Pre-built OpenSSL for Android at `third_party/openssl/android/<abi>/` — build it with `./scripts/build-openssl-android.sh`
+
+**iOS (`ios-*`):**
+- Xcode
+- Pre-built OpenSSL for iOS at `third_party/openssl/ios/<platform>/` — build it with `./scripts/build-openssl-ios.sh`
+
+### Targets and platforms
+
+| Platform | Targets |
+|----------|---------|
+| `macos-arm64` | tdlib, tdlib_jni |
+| `macos-x86_64` | tdlib, tdlib_jni |
+| `linux-x86_64` | tdlib, tdlib_jni |
+| `linux-arm64` | tdlib, tdlib_jni |
+| `windows-x64` | tdlib, tdlib_jni |
+| `windows-arm64` | tdlib, tdlib_jni |
+| `android-arm64-v8a` | tdlib_jni |
+| `android-armeabi-v7a` | tdlib_jni |
+| `android-x86_64` | tdlib_jni |
+| `android-x86` | tdlib_jni |
+| `ios-arm64` | tdlib |
+| `ios-arm64-simulator` | tdlib |
+| `ios-x86_64-simulator` | tdlib |
+
+Build outputs go to `out/<platform>/`.
+
+## License
+
+TDLib is licensed under the Boost Software License. See [LICENSE_1_0.txt](https://github.com/tdlib/td/blob/master/LICENSE_1_0.txt).
