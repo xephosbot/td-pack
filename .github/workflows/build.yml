@@ -420,7 +420,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/openssl/ios
-          key: openssl-ios-${{ hashFiles('scripts/build-openssl-ios.sh') }}
+          key: openssl-ios-${{ hashFiles('scripts/build-openssl-ios.sh', 'patches/ios-openssl-triple-fix.patch') }}
 
       - name: Build OpenSSL for iOS (all platforms)
         if: steps.cache-openssl-ios.outputs.cache-hit != 'true'
