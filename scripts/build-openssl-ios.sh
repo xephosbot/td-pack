@@ -108,13 +108,13 @@ build_target() {
   clang="$(xcrun --sdk "$sdk" --find clang)"
 
   # Construct target triple
-  local target_triple
+  local target_triple min_flag
   if [[ "$is_sim" == "true" ]]; then
     target_triple="${arch}-apple-ios${IOS_MIN_VERSION}-simulator"
-    local min_flag="-mios-simulator-version-min=${IOS_MIN_VERSION}"
+    min_flag="-mios-simulator-version-min=${IOS_MIN_VERSION}"
   else
     target_triple="${arch}-apple-ios${IOS_MIN_VERSION}"
-    local min_flag="-mios-version-min=${IOS_MIN_VERSION}"
+    min_flag="-mios-version-min=${IOS_MIN_VERSION}"
   fi
 
   local build_dir="$BUILD_TMP/build-$platform_name"
