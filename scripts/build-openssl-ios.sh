@@ -79,6 +79,7 @@ info "Cloning Python-Apple-support…"
 git clone https://github.com/beeware/Python-Apple-support "$PAS_DIR" 2>&1 | sed 's/^/  /'
 
 pushd "$PAS_DIR" > /dev/null
+# Checkout the exact commit that TDLib's Python-Apple-support.patch targets
 git checkout 6f43aba0ddd5a9f52f39775d0141bd4363614020 || error "Failed to checkout target commit"
 git reset --hard || error "git reset failed"
 
