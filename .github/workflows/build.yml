@@ -101,7 +101,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -193,7 +193,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -280,7 +280,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       # Cache vcpkg installed packages (keyed on pinned commit + target type)
       - name: Cache vcpkg packages
