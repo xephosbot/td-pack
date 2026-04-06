@@ -206,7 +206,7 @@ function Build-Jni {
     # Resolve JAVA_HOME
     $JavaHome = $env:JAVA_HOME
     if (-not $JavaHome -or -not (Test-Path $JavaHome)) {
-        Write-Fail "JAVA_HOME is not set or does not exist. Set it to a JDK installation (e.g. C:\Program Files\Eclipse Adoptium\jdk-17)."
+        Write-Fail "JAVA_HOME is not set or does not exist. Set it to a JDK installation (e.g. C:\Program Files\Eclipse Adoptium\jdk-21)."
     }
     Write-Info "JAVA_HOME = $JavaHome"
 

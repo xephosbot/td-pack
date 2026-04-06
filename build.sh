@@ -281,18 +281,12 @@ build_desktop_jni() {
     info "JAVA_HOME not set; relying on system JDK discovery"
   fi
 
-  # Linux: respect CC/CXX/CXXFLAGS from environment (CI: clang-18 + -stdlib=libc++)
-  local compiler_args=()
-  if [[ "$os" == "linux" ]]; then
-    [[ -n "${CC:-}"       ]] && compiler_args+=("-DCMAKE_C_COMPILER=${CC}")
-    [[ -n "${CXX:-}"      ]] && compiler_args+=("-DCMAKE_CXX_COMPILER=${CXX}")
-    [[ -n "${CXXFLAGS:-}" ]] && compiler_args+=("-DCMAKE_CXX_FLAGS=${CXXFLAGS}")
-  fi
-
   # Build via root CMakeLists.txt with TD_ANDROID_JSON_JAVA=ON to produce
   # the proper tdjni shared library (libtdjsonjava) with td_jni.cpp.
   # TD_PACK_STATIC_DEPS=ON ensures OpenSSL is statically linked so
   # the resulting .so/.dylib is portable (zlib is system-provided on macOS/Linux).
+  # CC/CXX/CXXFLAGS are read from environment by CMake (3.21+ auto-detects
+  # compiler launchers like ccache from CC="ccache clang-18").
   mkdir -p "$build_subdir"
   cmake -S "$PROJECT_ROOT" \
         -B "$build_subdir" \
@@ -300,7 +294,6 @@ build_desktop_jni() {
         -DTD_ANDROID_JSON_JAVA=ON \
         -DTD_PACK_STATIC_DEPS=ON \
         "${extra_args[@]}" \
-        "${compiler_args[@]}" \
         2>&1 | sed 's/^/  /'
 
   cmake --build "$build_subdir" \
