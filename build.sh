@@ -315,8 +315,8 @@ build_desktop_jni() {
   if [[ "$os" == "macos" ]]; then
     cp -av "$build_subdir"/libtdjsonjava*.dylib "$out_dir/lib/" 2>/dev/null || true
   else
-    # Linux .so files
-    cp -av "$build_subdir"/libtdjsonjava*.so* "$out_dir/lib/" 2>/dev/null || true
+    # Linux .so files (exclude .so.debug which contains unstripped symbols)
+    cp -av "$build_subdir"/libtdjsonjava*.so "$out_dir/lib/" 2>/dev/null || true
   fi
 
   success "JNI build complete → $out_dir"
