@@ -1,10 +1,14 @@
 # td-pack
 
-Prebuilt [TDLib](https://github.com/tdlib/td) libraries for all major platforms, built with CMake and [Conan](https://conan.io).
+Prebuilt [TDLib](https://github.com/tdlib/td) libraries for all major platforms.
+
+## How it works
+
+The entire build runs in CI; nothing needs to be installed locally to get the binaries.
 
 ## Supported platforms
 
-### Native static libraries (for Kotlin/Native, C/C++)
+### Static libraries (Kotlin/Native, C/C++)
 
 | Platform | Architectures |
 |----------|--------------|
@@ -13,7 +17,7 @@ Prebuilt [TDLib](https://github.com/tdlib/td) libraries for all major platforms,
 | Linux | x86_64, arm64 |
 | Windows | x64, arm64 |
 
-### JNI shared libraries (for JVM / Android)
+### JNI shared libraries (JVM / Android)
 
 | Platform | Architectures |
 |----------|--------------|
@@ -22,59 +26,26 @@ Prebuilt [TDLib](https://github.com/tdlib/td) libraries for all major platforms,
 | Linux | x86_64, arm64 |
 | Windows | x64, arm64 |
 
-> **Note:** JNI builds produce the **JSONJava** interface library (`libtdjsonjava`) — a shared
-> library compiled from `td_jni.cpp` with `TD_JSON_JAVA=1`.
+## Local build
 
-## Building
-
-### Prerequisites
-
-- [CMake](https://cmake.org) 3.19+
-- [Conan](https://conan.io) 2.x (`pip install conan`)
-- `gperf` (install via `apt`, `brew`, or `choco`)
-- Android NDK (for Android targets, set `ANDROID_NDK_HOME`)
-- Xcode (for iOS/macOS targets)
-- Visual Studio 2022 (for Windows targets)
-- JDK with `JAVA_HOME` set (for JNI targets)
-
-### Setup
-
-```bash
-# Install Conan and detect your default profile
-pip install conan
-conan profile detect --force
-```
-
-### Build commands
+You can also build locally using the included scripts.
 
 **Unix (macOS / Linux / Android / iOS):**
 
 ```bash
-# Static library
-./build.sh macos-arm64 tdlib
-./build.sh linux-x86_64 tdlib
-./build.sh ios-arm64 tdlib
-
-# JNI shared library
-./build.sh macos-arm64 tdlib_jni
-./build.sh linux-x86_64 tdlib_jni
-./build.sh android-arm64-v8a tdlib_jni
+./build.sh <target> <platform>
 ```
 
-**Windows (PowerShell):**
+**Windows (on Windows host only):**
 
 ```powershell
-# Static library
-.\build.ps1 -Platform windows-x64 -Target tdlib
-
-# JNI shared library
-.\build.ps1 -Platform windows-x64 -Target tdlib_jni
+.\build.ps1 -Target <target> -Platform <platform>
 ```
 
-### Available platforms
+### Targets and platforms
 
-| Platform | Allowed targets |
-|----------|----------------|
+| Platform | Targets |
+|----------|---------|
 | `macos-arm64` | tdlib, tdlib_jni |
 | `macos-x86_64` | tdlib, tdlib_jni |
 | `linux-x86_64` | tdlib, tdlib_jni |
@@ -86,23 +57,42 @@ conan profile detect --force
 | `android-x86_64` | tdlib_jni |
 | `android-x86` | tdlib_jni |
 | `ios-arm64` | tdlib |
+
+### Prerequisites
+
+**All platforms:**
+- [CMake](https://cmake.org) ≥ 3.19
+- [OpenSSL](https://www.openssl.org) (static libraries and headers)
+- `gperf`
+- C/C++ toolchain (GCC, Clang, or MSVC)
+
+**macOS:**
+- Xcode (provides the compiler, SDK, and `make`)
+- OpenSSL via Homebrew (`brew install openssl`)
+
+**Linux:**
+- OpenSSL dev package (`apt install libssl-dev` or equivalent)
+- `make`
+
+**Windows:**
+- Visual Studio 2022
+- The build script (`build.ps1`) automatically sets up [vcpkg](https://github.com/microsoft/vcpkg) and installs OpenSSL, zlib, and gperf through it
+
+**JNI targets (`tdlib_jni`):**
+- JDK with `JAVA_HOME` set
+
+**Android (`android-*`):**
+- Android NDK (set `ANDROID_NDK_ROOT` or `ANDROID_NDK`)
+- Pre-built OpenSSL for Android at `third_party/openssl/android/<abi>/` — build it with `./scripts/build-openssl-android.sh`
+
+**iOS (`ios-*`):**
+- Xcode
+- Pre-built OpenSSL for iOS at `third_party/openssl/ios/<platform>/` — build it with `./scripts/build-openssl-ios.sh`
 | `ios-arm64-simulator` | tdlib |
 | `ios-x86_64-simulator` | tdlib |
 
-Build outputs are placed in `build/<platform>-<target>/`.
-
-## Project structure
-
-```
-├── CMakeLists.txt       # JNI wrapper CMake (uses td/ via add_subdirectory)
-├── conanfile.py         # Conan 2.x dependency declaration (OpenSSL, zlib)
-├── build.sh             # Unix build script
-├── build.ps1            # Windows build script
-├── profiles/            # Conan cross-compilation profiles (one per platform)
-├── patches/             # Patches applied to TDLib source
-└── .github/workflows/   # CI workflow (19 builds)
-```
+Build outputs go to `out/<platform>/`.
 
 ## License
 
-TDLib is licensed under the terms of the Boost Software License. See [LICENSE_1_0.txt](https://github.com/tdlib/td/blob/master/LICENSE_1_0.txt) for details.
+TDLib is licensed under the Boost Software License. See [LICENSE_1_0.txt](https://github.com/tdlib/td/blob/master/LICENSE_1_0.txt).
