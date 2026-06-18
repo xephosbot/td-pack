@@ -159,6 +159,41 @@ prepare_cross_compiling() {
   success "Native code generator ready"
 }
 
+# ── Helper: strip static libraries in-place ────────────────────────────────────
+# Static .a archives ship pre-link object code; ~20% of their size is the local
+# symbol table, which the consumer's linker never needs.  Drop it (keeping the
+# global symbols required for linking) so the published archives are smaller.
+#   GNU strip  : --strip-unneeded  (keeps globals, removes locals + debug)
+#   Apple strip: -x -S             (-x removes non-globals, -S removes debug)
+# ranlib is re-run afterwards so the archive symbol index stays valid.
+strip_static_libs() {
+  local lib_dir="$1"
+  shopt -s nullglob
+  local libs=("$lib_dir"/*.a)
+  shopt -u nullglob
+  if [[ ${#libs[@]} -eq 0 ]]; then
+    warn "No .a files to strip in $lib_dir"
+    return 0
+  fi
+
+  banner "Stripping ${#libs[@]} static libraries"
+  local before after lib
+  before=$(du -sk "$lib_dir" | cut -f1)
+
+  for lib in "${libs[@]}"; do
+    if [[ "$(uname)" == "Darwin" ]]; then
+      strip -x -S "$lib" 2>/dev/null && ranlib "$lib" 2>/dev/null \
+        || warn "strip/ranlib failed for $(basename "$lib") — kept as-is"
+    else
+      strip --strip-unneeded "$lib" 2>/dev/null && ranlib "$lib" 2>/dev/null \
+        || warn "strip/ranlib failed for $(basename "$lib") — kept as-is"
+    fi
+  done
+
+  after=$(du -sk "$lib_dir" | cut -f1)
+  success "Static libs stripped: $((before / 1024)) MB → $((after / 1024)) MB"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Platform-specific build functions
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -226,6 +261,9 @@ build_desktop_static() {
       fi
     done
   fi
+
+  # Strip local symbols/debug from all .a (incl. OpenSSL) to shrink the archive
+  strip_static_libs "$out_dir/lib"
 
   # Copy specific headers
   cp -v "$build_subdir/td/telegram/tdjson_export.h" "$out_dir/include/td/telegram" 2>/dev/null || true
@@ -460,6 +498,9 @@ build_ios_static() {
   # Copy OpenSSL static libraries
   cp -v "$openssl_plat_dir/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
   cp -v "$openssl_plat_dir/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
+
+  # Strip local symbols/debug from all .a (incl. OpenSSL) to shrink the archive
+  strip_static_libs "$out_dir/lib"
 
   # Copy specific headers
   cp -v "$build_subdir/td/telegram/tdjson_export.h" "$out_dir/include/td/telegram" 2>/dev/null || true

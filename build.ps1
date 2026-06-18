@@ -149,6 +149,37 @@ function Invoke-Patch {
     Write-Ok 'Patch applied'
 }
 
+# ── Helper: strip static libraries in-place ────────────────────────────────────
+# MSVC ships no 'strip'; LLVM's llvm-objcopy understands COFF archives.  We only
+# drop debug info (safe — keeps every symbol needed for linking).  The bulk of
+# the Windows size reduction comes from the explicit lib list in Build-Static
+# and MinSizeRel, not from this step, so a missing llvm-objcopy is non-fatal.
+function Optimize-StaticLibs {
+    param([string]$LibDir)
+
+    $libs = Get-ChildItem -Path $LibDir -Filter '*.lib' -ErrorAction SilentlyContinue
+    if (-not $libs) { Write-Warn "No .lib files to strip in $LibDir"; return }
+
+    $tool = Get-Command llvm-objcopy -ErrorAction SilentlyContinue
+    if (-not $tool) {
+        # Try the bundled VS/LLVM location before giving up.
+        $candidate = Join-Path ${env:ProgramFiles} 'LLVM\bin\llvm-objcopy.exe'
+        if (Test-Path $candidate) { $tool = $candidate } else { $tool = $null }
+    }
+    if (-not $tool) {
+        Write-Warn 'llvm-objcopy not found — skipping .lib strip (size unaffected)'
+        return
+    }
+
+    $before = [math]::Round(($libs | Measure-Object Length -Sum).Sum / 1MB, 1)
+    foreach ($lib in $libs) {
+        & $tool --strip-debug $lib.FullName 2>$null
+        if ($LASTEXITCODE -ne 0) { Write-Warn "strip-debug failed for $($lib.Name) — kept as-is" }
+    }
+    $after = [math]::Round((Get-ChildItem -Path $LibDir -Filter '*.lib' | Measure-Object Length -Sum).Sum / 1MB, 1)
+    Write-Ok "Static libs stripped: $before MB -> $after MB"
+}
+
 # ── Build functions ────────────────────────────────────────────────────────────
 
 function Build-Static {
@@ -187,6 +218,9 @@ function Build-Static {
     Get-ChildItem -Path $BuildSub -Recurse -Filter '*.lib' | ForEach-Object {
         Copy-Item $_.FullName -Destination $OutLib -Force -Verbose
     }
+
+    # Strip debug info from the shipped .lib files
+    Optimize-StaticLibs -LibDir $OutLib
 
     # Copy specific headers
     $ExportHeader = Join-Path $BuildSub 'td\telegram\tdjson_export.h'

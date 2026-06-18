@@ -456,7 +456,7 @@ jobs:
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
-  #  Release — collect all 19 artifacts, package as .tar.gz, publish
+  #  Release — collect all 19 artifacts, package as .tar.zst, publish
   # ─────────────────────────────────────────────────────────────────────────────
   release:
     needs: [version, macos, linux, windows, android, ios]
@@ -470,23 +470,27 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package artifacts as .tar.gz
+      - name: Package artifacts as .tar.zst
         run: |
           mkdir -p release
+          # zstd -19 beats gzip by ~40% on these symbol/metadata-heavy archives
+          # while staying fast to decompress (zstd-jni on the consumer side).
+          export ZSTD_CLEVEL=19
+          export ZSTD_NBTHREADS=0   # use all cores
 
           for dir in artifacts/tdlib-*; do
             [ -d "$dir" ] || continue
             name=$(basename "$dir")
 
             # Create archive with lib/ and include/ at root (no extra directory prefix)
-            tar -czf "release/${name}.tar.gz" -C "$dir" .
+            tar --zstd -cf "release/${name}.tar.zst" -C "$dir" .
 
-            size=$(du -sh "release/${name}.tar.gz" | cut -f1)
-            echo "  ✓ ${name}.tar.gz  (${size})"
+            size=$(du -sh "release/${name}.tar.zst" | cut -f1)
+            echo "  ✓ ${name}.tar.zst  (${size})"
           done
 
           echo ""
-          echo "Total packages: $(ls release/*.tar.gz | wc -l)"
+          echo "Total packages: $(ls release/*.tar.zst | wc -l)"
           ls -lh release/
 
       - name: Copy td_api schema to release
@@ -509,10 +513,10 @@ jobs:
           )
           missing=0
           for name in "${EXPECTED[@]}"; do
-            if [[ -f "release/${name}.tar.gz" ]]; then
-              echo "  ✓ ${name}.tar.gz"
+            if [[ -f "release/${name}.tar.zst" ]]; then
+              echo "  ✓ ${name}.tar.zst"
             else
-              echo "  ✗ MISSING: ${name}.tar.gz"
+              echo "  ✗ MISSING: ${name}.tar.zst"
               missing=$((missing + 1))
             fi
           done
@@ -543,7 +547,7 @@ jobs:
 
             Download URL pattern:
             ```
-            https://github.com/${{ github.repository }}/releases/download/v${{ needs.version.outputs.tdlib_version }}/{asset}.tar.gz
+            https://github.com/${{ github.repository }}/releases/download/v${{ needs.version.outputs.tdlib_version }}/{asset}.tar.zst
             ```
 
             ---
@@ -552,30 +556,30 @@ jobs:
 
             | Asset | Platform |
             |---|---|
-            | `tdlib-macos-arm64.tar.gz` | macOS Apple Silicon |
-            | `tdlib-macos-x86_64.tar.gz` | macOS Intel |
-            | `tdlib-linux-arm64.tar.gz` | Linux arm64 |
-            | `tdlib-linux-x86_64.tar.gz` | Linux x86_64 |
-            | `tdlib-windows-arm64.tar.gz` | Windows arm64 |
-            | `tdlib-windows-x64.tar.gz` | Windows x64 |
-            | `tdlib-ios-arm64.tar.gz` | iOS device (arm64) |
-            | `tdlib-ios-arm64-simulator.tar.gz` | iOS Simulator (arm64) |
-            | `tdlib-ios-x86_64-simulator.tar.gz` | iOS Simulator (x86_64) |
+            | `tdlib-macos-arm64.tar.zst` | macOS Apple Silicon |
+            | `tdlib-macos-x86_64.tar.zst` | macOS Intel |
+            | `tdlib-linux-arm64.tar.zst` | Linux arm64 |
+            | `tdlib-linux-x86_64.tar.zst` | Linux x86_64 |
+            | `tdlib-windows-arm64.tar.zst` | Windows arm64 |
+            | `tdlib-windows-x64.tar.zst` | Windows x64 |
+            | `tdlib-ios-arm64.tar.zst` | iOS device (arm64) |
+            | `tdlib-ios-arm64-simulator.tar.zst` | iOS Simulator (arm64) |
+            | `tdlib-ios-x86_64-simulator.tar.zst` | iOS Simulator (x86_64) |
 
             ### JNI shared libraries — JVM / Android
 
             | Asset | Platform |
             |---|---|
-            | `tdlib-macos-jni-arm64.tar.gz` | macOS Apple Silicon |
-            | `tdlib-macos-jni-x86_64.tar.gz` | macOS Intel |
-            | `tdlib-linux-jni-arm64.tar.gz` | Linux arm64 |
-            | `tdlib-linux-jni-x86_64.tar.gz` | Linux x86_64 |
-            | `tdlib-windows-jni-arm64.tar.gz` | Windows arm64 |
-            | `tdlib-windows-jni-x64.tar.gz` | Windows x64 |
-            | `tdlib-android-arm64-v8a.tar.gz` | Android arm64-v8a |
-            | `tdlib-android-armeabi-v7a.tar.gz` | Android armeabi-v7a |
-            | `tdlib-android-x86_64.tar.gz` | Android x86_64 |
-            | `tdlib-android-x86.tar.gz` | Android x86 |
+            | `tdlib-macos-jni-arm64.tar.zst` | macOS Apple Silicon |
+            | `tdlib-macos-jni-x86_64.tar.zst` | macOS Intel |
+            | `tdlib-linux-jni-arm64.tar.zst` | Linux arm64 |
+            | `tdlib-linux-jni-x86_64.tar.zst` | Linux x86_64 |
+            | `tdlib-windows-jni-arm64.tar.zst` | Windows arm64 |
+            | `tdlib-windows-jni-x64.tar.zst` | Windows x64 |
+            | `tdlib-android-arm64-v8a.tar.zst` | Android arm64-v8a |
+            | `tdlib-android-armeabi-v7a.tar.zst` | Android armeabi-v7a |
+            | `tdlib-android-x86_64.tar.zst` | Android x86_64 |
+            | `tdlib-android-x86.tar.zst` | Android x86 |
 
             ---
 
@@ -596,7 +600,7 @@ jobs:
             |---|---|
             | `td-api-v${{ needs.version.outputs.tdlib_version }}.tl` | TDLib public API schema |
           files: |
-            release/*.tar.gz
+            release/*.tar.zst
             release/*.tl
           draft: false
           prerelease: false
