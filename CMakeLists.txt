@@ -24,7 +24,8 @@ if (TD_PACK_STATIC_DEPS)
   endif()
 endif()
 
-# Conan-provided dependencies
+# Dependencies are located via OPENSSL_ROOT_DIR (Homebrew / from-source on
+# macOS, apt on Linux) or the vcpkg toolchain on Windows — not Conan.
 find_package(OpenSSL REQUIRED)
 
 if (TD_PACK_STATIC_DEPS)
@@ -42,16 +43,13 @@ if (TD_PACK_STATIC_DEPS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ${_td_pack_save_suffixes})
 endif()
 
-# Conan's config-mode find_package creates imported targets but may not set
-# the legacy Find-module variables (OPENSSL_INCLUDE_DIR, OPENSSL_CRYPTO_LIBRARY,
-# ZLIB_LIBRARIES, etc.) that td's CMakeLists.txt uses for linking.
-# Conan 2 CMakeDeps may name targets as openssl::crypto (lowercase) or
-# OpenSSL::Crypto (capitalized) depending on recipe configuration.
-#
-# IMPORTANT: Always prefer Conan-provided imported targets over values found
-# by CMake's built-in FindOpenSSL module.  The system OpenSSL version may
-# differ (e.g. 3.x vs 1.1.1) causing ABI mismatches at link time, and
-# system libraries are not available during cross-compilation.
+# find_package(OpenSSL) may create imported targets without also setting the
+# legacy Find-module variables (OPENSSL_INCLUDE_DIR, OPENSSL_CRYPTO_LIBRARY,
+# ZLIB_LIBRARIES, …) that td's CMakeLists.txt reads for linking. Recover the
+# include dir from whichever imported target the toolchain exposed (the target
+# names below cover CMake's FindOpenSSL, vcpkg, and config-mode variants).
+# Prefer the imported target over a system OpenSSL: the version may differ
+# (e.g. 3.x vs 1.1.1), and system libs are absent when cross-compiling.
 
 # --- OpenSSL include directory ---
 set(_ossl_inc_found FALSE)

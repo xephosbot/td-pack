@@ -48,8 +48,9 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────
   #  macOS  (arm64 + x86_64) × (static + JNI) = 4 builds
-  #  Runners:  macos-15       → Apple Silicon (arm64)
-  #            macos-15       → x86_64 (cross-compiled on ARM with Rosetta OpenSSL)
+  #  Runner:  macos-15 (Apple Silicon) for both arches.
+  #  x86_64 is a native clang cross-compile (-arch x86_64); OpenSSL is built
+  #  from source per-arch via scripts/build-openssl-macos.sh (cached, no Rosetta).
   # ─────────────────────────────────────────────────────────────────────────────
   macos:
     runs-on: ${{ matrix.runner }}
@@ -88,13 +89,7 @@ jobs:
           submodules: recursive
 
       - name: Install dependencies
-        run: |
-          brew install gperf cmake openssl ccache
-          # For x86_64 cross-compilation on ARM runner, install x86_64 OpenSSL via Rosetta
-          if [[ "${{ matrix.platform }}" == "macos-x86_64" ]]; then
-            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
-            arch -x86_64 /usr/local/bin/brew install openssl
-          fi
+        run: brew install gperf cmake ccache
 
       - name: Setup Java (JNI only)
         if: matrix.target == 'tdlib_jni'
@@ -102,6 +97,18 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      # OpenSSL built from source for both arches (no Rosetta), cached together
+      - name: Cache OpenSSL for macOS
+        id: cache-openssl-macos
+        uses: actions/cache@v4
+        with:
+          path: third_party/openssl/macos
+          key: openssl-macos-${{ hashFiles('scripts/build-openssl-macos.sh') }}
+
+      - name: Build OpenSSL for macOS (arm64 + x86_64)
+        if: steps.cache-openssl-macos.outputs.cache-hit != 'true'
+        run: ./scripts/build-openssl-macos.sh
 
       - name: Cache ccache
         uses: actions/cache@v4

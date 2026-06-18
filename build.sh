@@ -211,13 +211,11 @@ build_desktop_static() {
   local extra_args=()
 
   if [[ "$os" == "macos" ]]; then
-    local openssl_root
-    if [[ "$arch" == "arm64" ]]; then
-      openssl_root="/opt/homebrew/opt/openssl"
-    else
-      openssl_root="/usr/local/opt/openssl"
-    fi
-    [[ -d "$openssl_root" ]] || error "OpenSSL not found at $openssl_root. Install via brew."
+    # OpenSSL is built from source per-arch (no Homebrew, no Rosetta) by
+    # scripts/build-openssl-macos.sh → third_party/openssl/macos/<arch>.
+    local openssl_root="$PROJECT_ROOT/third_party/openssl/macos/${arch}"
+    [[ -d "$openssl_root" ]] || error "OpenSSL for macos/${arch} not found at $openssl_root.\n" \
+      "Run: ./scripts/build-openssl-macos.sh ${arch}"
     extra_args+=(
       "-DOPENSSL_ROOT_DIR=${openssl_root}"
       "-DCMAKE_OSX_ARCHITECTURES=${arch}"
@@ -288,13 +286,11 @@ build_desktop_jni() {
   local extra_args=()
 
   if [[ "$os" == "macos" ]]; then
-    local openssl_root
-    if [[ "$arch" == "arm64" ]]; then
-      openssl_root="/opt/homebrew/opt/openssl"
-    else
-      openssl_root="/usr/local/opt/openssl"
-    fi
-    [[ -d "$openssl_root" ]] || error "OpenSSL not found at $openssl_root. Install via brew."
+    # OpenSSL is built from source per-arch (no Homebrew, no Rosetta) by
+    # scripts/build-openssl-macos.sh → third_party/openssl/macos/<arch>.
+    local openssl_root="$PROJECT_ROOT/third_party/openssl/macos/${arch}"
+    [[ -d "$openssl_root" ]] || error "OpenSSL for macos/${arch} not found at $openssl_root.\n" \
+      "Run: ./scripts/build-openssl-macos.sh ${arch}"
     extra_args+=(
       "-DOPENSSL_ROOT_DIR=${openssl_root}"
       "-DCMAKE_OSX_ARCHITECTURES=${arch}"

@@ -1,6 +1,6 @@
 # Memory Index — td-pack
 
-- [TDLib Cross-Platform Integration Plan](#tdlib-cross-platform-integration-plan) — 19 архивов .tar.gz для KMP, 6 фаз, имена ассетов, структура содержимого, матрица CI/CD
+- [TDLib Cross-Platform Integration Plan](#tdlib-cross-platform-integration-plan) — 19 архивов .tar.zst для KMP, 6 фаз, имена ассетов, структура содержимого, матрица CI/CD
 
 ---
 
@@ -8,11 +8,11 @@
 
 **Версия 1.0 · Март 2026**
 
-**Цель:** Собрать TDLib для KMP-проекта в виде 19 независимых `.tar.gz` архивов, публикуемых на GitHub Releases. Gradle-плагин (`TdlibDependencies`) скачивает только нужные архивы лениво по имени ассета.
+**Цель:** Собрать TDLib для KMP-проекта в виде 19 независимых `.tar.zst` архивов, публикуемых на GitHub Releases. Gradle-плагин (`TdlibDependencies`) скачивает только нужные архивы лениво по имени ассета.
 
 ## Матрица 19 архивов
 
-| Платформа / ABI | Имя архива (.tar.gz) | Локальная папка в libs/ |
+| Платформа / ABI | Имя архива (.tar.zst) | Локальная папка в libs/ |
 |---|---|---|
 | Windows x64 — static | `tdlib-windows-x64` | windows-x64 |
 | Windows arm64 — static | `tdlib-windows-arm64` | windows-arm64 |
@@ -68,7 +68,7 @@
 - iOS: `CMAKE_OSX_ARCHITECTURES` и `IPHONEOS_DEPLOYMENT_TARGET >= 13.0`
 
 ### Фаза 3 — Сборка зависимостей (~3–5 дней, Высокий приоритет)
-- **OpenSSL** статически: Windows (vcpkg), macOS (brew), Linux (apt/src), Android (prebuilt per ABI), iOS (per sysroot)
+- **OpenSSL** статически: Windows (vcpkg), macOS (from-source `build-openssl-macos.sh`, arm64+x86_64), Linux (apt/src), Android (prebuilt per ABI), iOS (per sysroot)
 - **zlib** статически: Windows (vcpkg), macOS/Linux (системная), Android (NDK `-lz`), iOS (`libz.tbd`)
 - **JDK** только для десктоп JNI; Android JNI использует NDK, не JDK
 
@@ -80,7 +80,7 @@
 |---|---|---|
 | Windows x64 | `windows-latest` | static + jni |
 | Windows arm64 | `windows-11-arm` | static + jni |
-| macOS x86_64 | `macos-15-intel` | static + jni |
+| macOS x86_64 | `macos-15` (clang cross `-arch x86_64`) | static + jni |
 | macOS arm64 | `macos-15` | static + jni |
 | Linux x86_64 | `ubuntu-latest` | static + jni |
 | Linux arm64 | `ubuntu-24.04-arm` | static + jni |
@@ -92,9 +92,11 @@
 2. Проход 2 (таргет): cmake с NDK/Xcode toolchain
 
 **Публикация:**
-- `tar -czf tdlib-{os}-{arch}.tar.gz lib/ include/` (strip root dir)
+- `tar --zstd -cf tdlib-{os}-{arch}.tar.zst -C <dir> .` (zstd -19, strip root dir)
+- Перед упаковкой: static `.a`/`.lib` стрипаются (`--strip-unneeded`/`strip -x -S`/`llvm-objcopy`), static-дистрибутив собирается в MinSizeRel
 - Финальный job `release` (needs: все 19) публикует на GitHub Releases
-- URL: `github.com/xephosbot/td-pack/releases/download/v{ver}/{asset}.tar.gz`
+- URL: `github.com/xephosbot/td-pack/releases/download/v{ver}/{asset}.tar.zst`
+- ⚠️ Потребитель (`TdlibDependencies.kt`) должен распаковывать `.tar.zst` (zstd-jni)
 - Имя ассета должно точно совпадать с `assetName()` в `TdlibDependencies.kt`
 
 **Кэширование:** ccache, vcpkg `installed/`, `prepare_cross_compiling` артефакты
