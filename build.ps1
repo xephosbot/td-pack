@@ -84,6 +84,56 @@ if ($Target -eq 'tdlib_jni') {
 $Nproc = [Environment]::ProcessorCount
 if (-not $Nproc -or $Nproc -lt 1) { $Nproc = 4 }
 
+# ── Toolchain: Ninja + clang-cl + sccache ──────────────────────────────────────
+# We build with the Ninja generator and clang-cl instead of the MSVC/MSBuild
+# generator for two reasons:
+#   * size  — clang produces far leaner static .lib than cl.exe (MSVC tdcore.lib
+#             was ~536 MB vs ~100 MB for the same code under clang on Linux);
+#   * speed — Ninja + sccache caches compilation, so warm CI builds drop from
+#             ~40 min to a few minutes (MSBuild does not cache cleanly).
+# clang-cl is ABI-compatible with MSVC, so vcpkg's *-windows triplets still work.
+# The arch is taken from the Developer Command Prompt environment (set by the CI
+# 'msvc-dev-cmd' step or a local VS prompt), so no -A/--target is needed.
+function Find-ClangCl {
+    # Escape hatch: set TDPACK_USE_CLANG=0 to force MSVC cl.exe (e.g. if clang-cl
+    # hits a known arm64 codegen bug). sccache/Ninja still apply, so speed is kept.
+    if ($env:TDPACK_USE_CLANG -in @('0', 'false', 'off')) {
+        Write-Info 'TDPACK_USE_CLANG disabled — using MSVC cl.exe'
+        return $null
+    }
+    $c = Get-Command clang-cl -ErrorAction SilentlyContinue
+    if ($c) { return $c.Source }
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles} 'LLVM\bin\clang-cl.exe')
+    )
+    foreach ($vs in @('Enterprise','Professional','Community','BuildTools')) {
+        $candidates += "${env:ProgramFiles}\Microsoft Visual Studio\2022\$vs\VC\Tools\Llvm\x64\bin\clang-cl.exe"
+        $candidates += "${env:ProgramFiles}\Microsoft Visual Studio\2022\$vs\VC\Tools\Llvm\bin\clang-cl.exe"
+    }
+    foreach ($p in $candidates) { if (Test-Path $p) { return $p } }
+    return $null
+}
+
+function Get-ToolchainArgs {
+    $a = @('-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release')
+    $clang = Find-ClangCl
+    if ($clang) {
+        $clangFwd = $clang -replace '\\', '/'
+        Write-Info "Compiler: clang-cl ($clang)"
+        $a += @("-DCMAKE_C_COMPILER=$clangFwd", "-DCMAKE_CXX_COMPILER=$clangFwd")
+    } else {
+        Write-Warn 'clang-cl not found — falling back to MSVC cl.exe (size win lost, sccache still applies)'
+        $a += @('-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl')
+    }
+    if (Get-Command sccache -ErrorAction SilentlyContinue) {
+        Write-Info 'Compiler launcher: sccache'
+        $a += @('-DCMAKE_C_COMPILER_LAUNCHER=sccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=sccache')
+    } else {
+        Write-Warn 'sccache not found — building without compiler cache'
+    }
+    return $a
+}
+
 # ── Step 1: Init git submodule ────────────────────────────────────────────────
 Write-Banner 'Initialising TDLib submodule'
 Invoke-Cmd git @('-C', $ProjectRoot, 'submodule', 'update', '--init', '--depth=1', 'td')
@@ -190,23 +240,22 @@ function Build-Static {
 
     New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
-    # Release, not MinSizeRel: with td's function-level sections, /O1 produces
-    # more COMDAT sections → larger, less-compressible .lib (measured).
-    Invoke-Cmd cmake @(
-        '-A', $CmakeArch,
+    # Ninja + clang-cl + sccache (Get-ToolchainArgs). Release, not MinSizeRel:
+    # with td's function-level sections, /O1 produces more COMDAT sections →
+    # larger, less-compressible .lib (measured).
+    Invoke-Cmd cmake (@(
         '-S', $TdDir,
-        '-B', $BuildSub,
-        "-DCMAKE_BUILD_TYPE=Release",
+        '-B', $BuildSub
+    ) + (Get-ToolchainArgs) + @(
         '-DTD_ENABLE_JNI=OFF',
         '-DOPENSSL_USE_STATIC_LIBS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet"
-    )
+    ))
 
     Invoke-Cmd cmake @(
         '--build', $BuildSub,
         '--target', 'tdjson_static',
-        '--config', 'Release',
         '--parallel', "$Nproc"
     )
 
@@ -283,23 +332,21 @@ function Build-Jni {
     # the proper tdjni shared library (tdjsonjava.dll) with td_jni.cpp.
     # TD_PACK_STATIC_DEPS=ON ensures OpenSSL and zlib are statically linked so
     # the resulting DLL is portable (Windows does not ship either library).
-    Invoke-Cmd cmake @(
-        '-A', $CmakeArch,
+    Invoke-Cmd cmake (@(
         '-S', $ProjectRoot,
-        '-B', $BuildSub,
-        '-DCMAKE_BUILD_TYPE=Release',
+        '-B', $BuildSub
+    ) + (Get-ToolchainArgs) + @(
         '-DTD_ANDROID_JSON_JAVA=ON',
         '-DTD_PACK_STATIC_DEPS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet",
         "-DJAVA_HOME=$JavaHome",
         "-DGPERF_EXECUTABLE=$GperfExe"
-    )
+    ))
 
     Invoke-Cmd cmake @(
         '--build', $BuildSub,
         '--target', 'tdjni',
-        '--config', 'Release',
         '--parallel', "$Nproc"
     )
 

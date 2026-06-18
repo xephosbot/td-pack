@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Which platform group to build (for fast iteration). Tag pushes always build all."
+        type: choice
+        default: all
+        options: [all, windows, linux, macos, android, ios]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -53,6 +59,7 @@ jobs:
   #  from source per-arch via scripts/build-openssl-macos.sh (cached, no Rosetta).
   # ─────────────────────────────────────────────────────────────────────────────
   macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'macos'
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.artifact }}
     strategy:
@@ -147,6 +154,7 @@ jobs:
   #  JNI builds use clang-18 + libc++ per official TDLib instructions
   # ─────────────────────────────────────────────────────────────────────────────
   linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'linux'
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.artifact }}
     strategy:
@@ -244,9 +252,11 @@ jobs:
   #  Windows  (x64 + arm64) × (static + JNI) = 4 builds
   #  Runners:  windows-latest  → x64
   #            windows-11-arm  → arm64  (native)
-  #  Dependencies via vcpkg (pinned commit bc3512a)
+  #  Toolchain: Ninja + clang-cl + sccache (leaner .lib, cached compilation).
+  #  Dependencies via vcpkg (pinned commit bc3512a, MSVC-ABI triplets).
   # ─────────────────────────────────────────────────────────────────────────────
   windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'windows'
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.artifact }}
     strategy:
@@ -258,24 +268,28 @@ jobs:
             platform: windows-x64
             artifact: tdlib-windows-x64
             out:      out\windows\x64
+            vcvars:   amd64
 
           - runner:   windows-latest
             target:   tdlib_jni
             platform: windows-x64
             artifact: tdlib-windows-jni-x64
             out:      out\windows-jni\x64
+            vcvars:   amd64
 
           - runner:   windows-11-arm
             target:   tdlib
             platform: windows-arm64
             artifact: tdlib-windows-arm64
             out:      out\windows\arm64
+            vcvars:   arm64
 
           - runner:   windows-11-arm
             target:   tdlib_jni
             platform: windows-arm64
             artifact: tdlib-windows-jni-arm64
             out:      out\windows-jni\arm64
+            vcvars:   arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -289,6 +303,22 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Ninja + clang-cl need the MSVC toolchain env (headers, libs, linker, ABI).
+      # The VS generator set this up implicitly; Ninja does not, so import the
+      # Developer Command Prompt vars for the target arch.
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.vcvars }}
+
+      - name: Install CMake + Ninja
+        uses: lukka/get-cmake@latest
+
+      # Compilation cache — the main lever for Windows build time. Stored in the
+      # GitHub Actions cache via SCCACHE_GHA_ENABLED (set on the Build step).
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
       # Cache vcpkg installed packages (keyed on pinned commit + target type)
       - name: Cache vcpkg packages
         uses: actions/cache@v4
@@ -298,6 +328,12 @@ jobs:
 
       - name: Build
         run: .\build.ps1 -Target ${{ matrix.target }} -Platform ${{ matrix.platform }}
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -314,6 +350,7 @@ jobs:
   #  Two-pass strategy (prepare_cross_compiling) is handled inside build.sh.
   # ─────────────────────────────────────────────────────────────────────────────
   android:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'android'
     runs-on: ubuntu-latest
     name: tdlib-android-${{ matrix.abi }}
     strategy:
@@ -395,6 +432,7 @@ jobs:
   #  Toolchain: td/CMake/iOS.cmake (bundled in submodule)
   # ─────────────────────────────────────────────────────────────────────────────
   ios:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'ios'
     runs-on: macos-15
     name: tdlib-ios-${{ matrix.arch }}
     strategy:
