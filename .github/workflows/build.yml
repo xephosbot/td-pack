@@ -467,6 +467,9 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   release:
     needs: [version, macos, linux, windows, android, ios]
+    # Publish only on tag pushes. workflow_dispatch runs build + upload the
+    # artifacts (sizes visible in the run) without touching any GitHub Release.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
