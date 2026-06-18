@@ -190,11 +190,14 @@ function Build-Static {
 
     New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
+    # MinSizeRel (/O1) for the shipped static libs — the VS generator is
+    # multi-config so the actual knob is --config below; CMAKE_BUILD_TYPE is
+    # kept in sync for any single-config consumer of this script.
     Invoke-Cmd cmake @(
         '-A', $CmakeArch,
         '-S', $TdDir,
         '-B', $BuildSub,
-        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_BUILD_TYPE=MinSizeRel",
         '-DTD_ENABLE_JNI=OFF',
         '-DOPENSSL_USE_STATIC_LIBS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
@@ -204,7 +207,7 @@ function Build-Static {
     Invoke-Cmd cmake @(
         '--build', $BuildSub,
         '--target', 'tdjson_static',
-        '--config', 'Release',
+        '--config', 'MinSizeRel',
         '--parallel', "$Nproc"
     )
 
@@ -214,9 +217,24 @@ function Build-Static {
     New-Item -ItemType Directory -Force -Path $OutLib | Out-Null
     New-Item -ItemType Directory -Force -Path $OutInc | Out-Null
 
-    # Copy .lib files from build dir (Release config subdir on MSVC)
-    Get-ChildItem -Path $BuildSub -Recurse -Filter '*.lib' | ForEach-Object {
-        Copy-Item $_.FullName -Destination $OutLib -Force -Verbose
+    # Log every .lib in the build tree (path + size) so the windows-arm64 vs
+    # x64 size gap is visible in CI, then ship ONLY the TDLib static libs
+    # (td*.lib) plus OpenSSL/zlib — this excludes example/test/benchmark and
+    # stray dependency libs that the previous blanket recursive copy pulled in.
+    $allLibs = Get-ChildItem -Path $BuildSub -Recurse -Filter '*.lib'
+    Write-Info "All .lib under build tree ($($allLibs.Count)):"
+    $allLibs | Sort-Object Length -Descending | ForEach-Object {
+        Write-Host ('  {0,8:N1} MB  {1}' -f ($_.Length / 1MB), $_.FullName)
+    }
+
+    $shipPattern = '^(td.*|libcrypto.*|libssl.*|crypto|ssl|zlib.*|zstd.*)$'
+    $shipped = $allLibs |
+        Where-Object { $_.BaseName -match $shipPattern } |
+        Sort-Object Name -Unique
+    if (-not $shipped) { Write-Fail "No shippable .lib found under $BuildSub" }
+    Write-Info "Shipping $($shipped.Count) libs:"
+    foreach ($lib in $shipped) {
+        Copy-Item $lib.FullName -Destination $OutLib -Force -Verbose
     }
 
     # Strip debug info from the shipped .lib files

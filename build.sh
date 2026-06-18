@@ -224,10 +224,12 @@ build_desktop_static() {
     )
   fi
 
+  # MinSizeRel (-Os) shrinks the incompressible .text of the shipped libs;
+  # TDLib is I/O-bound so the CPU cost is negligible.
   mkdir -p "$build_subdir"
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
-        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_BUILD_TYPE=MinSizeRel \
         -DTD_ENABLE_JNI=OFF \
         -DOPENSSL_USE_STATIC_LIBS=ON \
         "${extra_args[@]}" \
@@ -235,7 +237,7 @@ build_desktop_static() {
 
   cmake --build "$build_subdir" \
         --target tdjson_static \
-        --config Release \
+        --config MinSizeRel \
         -j"$NPROC" \
         2>&1 | sed 's/^/  /'
 
@@ -468,7 +470,7 @@ build_ios_static() {
   # explicitly so CMake finds our cross-compiled OpenSSL.
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
-        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_BUILD_TYPE=MinSizeRel \
         -DCMAKE_TOOLCHAIN_FILE="$ios_toolchain" \
         -DIOS_PLATFORM="$ios_platform" \
         -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \
@@ -483,7 +485,7 @@ build_ios_static() {
 
   cmake --build "$build_subdir" \
         --target tdjson_static \
-        --config Release \
+        --config MinSizeRel \
         -j"$NPROC" \
         2>&1 | sed 's/^/  /'
 
