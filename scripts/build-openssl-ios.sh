@@ -2,8 +2,9 @@
 # =============================================================================
 # scripts/build-openssl-ios.sh
 # Builds OpenSSL static libraries for all three iOS targets using the upstream
-# td/example/ios/build-openssl.sh approach (Python-Apple-support), with an
-# additional patch to fix the double-simulator target triple bug.
+# td/example/ios/build-openssl.sh approach (Python-Apple-support). TDLib's own
+# Python-Apple-support.patch already emits correct simulator target triples
+# (arm64-apple-ios-simulator via OS_LOWER), so no extra triple-fix is needed.
 #
 # Produces outputs under:
 #   third_party/openssl/ios/{OS64,SIMULATORARM64,SIMULATOR64}/
@@ -38,7 +39,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 OUTPUT_DIR="$PROJECT_ROOT/third_party/openssl/ios"
-TRIPLE_FIX_PATCH="$PROJECT_ROOT/patches/ios-openssl-triple-fix.patch"
 
 # ── Platform check ────────────────────────────────────────────────────────────
 if [[ "$(uname)" != "Darwin" ]]; then
@@ -60,13 +60,8 @@ if [[ ! -f "$UPSTREAM_SCRIPT" ]]; then
 fi
 [[ -x "$UPSTREAM_SCRIPT" ]] || chmod +x "$UPSTREAM_SCRIPT"
 
-if [[ ! -f "$TRIPLE_FIX_PATCH" ]]; then
-  error "Triple fix patch not found: $TRIPLE_FIX_PATCH"
-fi
-
 banner "Building OpenSSL for iOS (all platforms)"
 info "Using upstream: $UPSTREAM_SCRIPT"
-info "Triple fix:     $TRIPLE_FIX_PATCH"
 info "Output dir:     $OUTPUT_DIR"
 
 # ── Clone Python-Apple-support & apply patches ────────────────────────────────
@@ -86,10 +81,7 @@ git reset --hard || error "git reset failed"
 info "Applying TDLib's Python-Apple-support patch…"
 git apply "$UPSTREAM_PATCH" || error "Failed to apply TDLib patch"
 
-info "Applying triple-fix patch…"
-git apply "$TRIPLE_FIX_PATCH" || error "Failed to apply triple-fix patch"
-
-success "All patches applied"
+success "Patch applied"
 popd > /dev/null
 
 # ── Build OpenSSL for iOS & iOS-simulator ─────────────────────────────────────

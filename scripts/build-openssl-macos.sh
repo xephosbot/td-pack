@@ -85,8 +85,10 @@ build_arch() {
   tar -xzf "$WORK_DIR/$TARBALL" -C "$WORK_DIR/${arch}"
 
   pushd "$src_dir" >/dev/null
+  # no-apps is only valid on OpenSSL >= 3.2; 3.0.x rejects it. no-tests keeps
+  # the build to just the libraries we install via install_sw.
   ./Configure "$target" \
-      no-shared no-tests no-apps \
+      no-shared no-tests \
       --prefix="$out_dir" \
       --openssldir="$out_dir/ssl" \
       "-mmacosx-version-min=${MACOS_MIN}" \
