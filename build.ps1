@@ -84,16 +84,19 @@ if ($Target -eq 'tdlib_jni') {
 $Nproc = [Environment]::ProcessorCount
 if (-not $Nproc -or $Nproc -lt 1) { $Nproc = 4 }
 
-# ── Toolchain: Ninja + clang-cl + sccache ──────────────────────────────────────
+# ── Toolchain: Ninja + clang-cl ────────────────────────────────────────────────
 # We build with the Ninja generator and clang-cl instead of the MSVC/MSBuild
 # generator for two reasons:
 #   * size  — clang produces far leaner static .lib than cl.exe (MSVC tdcore.lib
 #             was ~536 MB vs ~100 MB for the same code under clang on Linux);
-#   * speed — Ninja + sccache caches compilation, so warm CI builds drop from
-#             ~40 min to a few minutes (MSBuild does not cache cleanly).
+#   * speed — Ninja enables td's built-in ccache launcher to cache compilation
+#             (MSBuild does not cache cleanly).
 # clang-cl is ABI-compatible with MSVC, so vcpkg's *-windows triplets still work.
 # The arch is taken from the Developer Command Prompt environment (set by the CI
 # 'msvc-dev-cmd' step or a local VS prompt), so no -A/--target is needed.
+# We do NOT set CMAKE_*_COMPILER_LAUNCHER here: td already wires up ccache via
+# RULE_LAUNCH_COMPILE when it finds ccache, and stacking a second launcher
+# (e.g. sccache) produces a broken "ccache sccache clang-cl" command line.
 function Find-ClangCl {
     # Escape hatch: set TDPACK_USE_CLANG=0 to force MSVC cl.exe (e.g. if clang-cl
     # hits a known arm64 codegen bug). sccache/Ninja still apply, so speed is kept.
@@ -124,12 +127,6 @@ function Get-ToolchainArgs {
     } else {
         Write-Warn 'clang-cl not found — falling back to MSVC cl.exe (size win lost, sccache still applies)'
         $a += @('-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl')
-    }
-    if (Get-Command sccache -ErrorAction SilentlyContinue) {
-        Write-Info 'Compiler launcher: sccache'
-        $a += @('-DCMAKE_C_COMPILER_LAUNCHER=sccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=sccache')
-    } else {
-        Write-Warn 'sccache not found — building without compiler cache'
     }
     return $a
 }
