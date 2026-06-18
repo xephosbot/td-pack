@@ -174,30 +174,37 @@ foreach ($pkg in $VcpkgPackages) {
 }
 Write-Ok 'vcpkg packages installed'
 
-# ── Step 3: Apply patch (JNI only) ────────────────────────────────────────────
-function Invoke-Patch {
-    Write-Banner 'Applying native-bridge-jni patch'
+# ── Step 3: Apply a build-time patch to the td submodule (idempotent) ──────────
+function Invoke-TdPatch {
+    param([string]$Patch, [string]$Label)
+    Write-Banner "Applying $Label patch"
 
-    if (-not (Test-Path $PatchFile)) {
-        Write-Fail "Patch file not found: $PatchFile"
+    if (-not (Test-Path $Patch)) {
+        Write-Fail "Patch file not found: $Patch"
     }
 
-    # Check if already applied (reverse check)
-    $reverseCheck = & git -C $TdDir apply --check --reverse $PatchFile 2>&1
+    # Already applied? (reverse check succeeds)
+    & git -C $TdDir apply --check --reverse $Patch 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
         Write-Info 'Patch already applied, skipping'
         return
     }
 
-    # Verify applies cleanly
-    $forwardCheck = & git -C $TdDir apply --check $PatchFile 2>&1
+    # Verify it applies cleanly
+    $forwardCheck = & git -C $TdDir apply --check $Patch 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Patch does not apply cleanly to td/. Resolve conflicts manually.`n$forwardCheck"
     }
 
-    Invoke-Cmd git @('-C', $TdDir, 'apply', $PatchFile)
+    Invoke-Cmd git @('-C', $TdDir, 'apply', $Patch)
     Write-Ok 'Patch applied'
 }
+
+# clang-cl support: td's TdSetUpCompiler.cmake routes clang-cl into its GNU
+# Clang path (-std=c++17), which clang-cl's cl-style driver rejects. This
+# one-line build-time patch makes clang-cl (MSVC=true) use td's MSVC flag path
+# instead. No-op for real MSVC and for GNU clang/gcc on Linux/macOS.
+$ClangClPatch = Join-Path $ProjectRoot 'patches\clang-cl-support.patch'
 
 # ── Helper: strip static libraries in-place ────────────────────────────────────
 # MSVC ships no 'strip'; LLVM's llvm-objcopy understands COFF archives.  We only
@@ -366,12 +373,17 @@ function Build-Jni {
 }
 
 # ── Dispatch ───────────────────────────────────────────────────────────────────
+# When building with clang-cl, patch td so it uses its MSVC flag path.
+if (Find-ClangCl) {
+    Invoke-TdPatch -Patch $ClangClPatch -Label 'clang-cl-support'
+}
+
 switch ($Target) {
     'tdlib' {
         Build-Static
     }
     'tdlib_jni' {
-        Invoke-Patch
+        Invoke-TdPatch -Patch $PatchFile -Label 'native-bridge-jni'
         Build-Jni
     }
 }
