@@ -190,14 +190,13 @@ function Build-Static {
 
     New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
-    # MinSizeRel (/O1) for the shipped static libs — the VS generator is
-    # multi-config so the actual knob is --config below; CMAKE_BUILD_TYPE is
-    # kept in sync for any single-config consumer of this script.
+    # Release, not MinSizeRel: with td's function-level sections, /O1 produces
+    # more COMDAT sections → larger, less-compressible .lib (measured).
     Invoke-Cmd cmake @(
         '-A', $CmakeArch,
         '-S', $TdDir,
         '-B', $BuildSub,
-        "-DCMAKE_BUILD_TYPE=MinSizeRel",
+        "-DCMAKE_BUILD_TYPE=Release",
         '-DTD_ENABLE_JNI=OFF',
         '-DOPENSSL_USE_STATIC_LIBS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
@@ -207,7 +206,7 @@ function Build-Static {
     Invoke-Cmd cmake @(
         '--build', $BuildSub,
         '--target', 'tdjson_static',
-        '--config', 'MinSizeRel',
+        '--config', 'Release',
         '--parallel', "$Nproc"
     )
 
