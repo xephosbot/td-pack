@@ -70,18 +70,28 @@ fi
 # ── Build one slice ────────────────────────────────────────────────────────────
 # OpenSSL's native targets:
 #   ios64-xcrun         → xcrun -sdk iphoneos cc -arch arm64        (device)
-#   iossimulator-xcrun  → xcrun -sdk iphonesimulator cc             (arch via -arch)
+#   iossimulator-xcrun  → xcrun -sdk iphonesimulator cc             (arch via CC override)
 build_slice() {
   local name="$1"   # OS64 | SIMULATORARM64 | SIMULATOR64
-  local cfg_target arch min_flag
+  local cfg_target min_flag cc_override
 
+  # The device target (ios64-xcrun) already bakes in -arch arm64. The simulator
+  # target leaves the arch to the host default, so we pin it — but via a CC
+  # override, NOT a bare "-arch <arch>" Configure arg: OpenSSL parses the bare
+  # arch token as a second target name ("target already defined").
   case "$name" in
     OS64)
-      cfg_target="ios64-xcrun";        arch="";       min_flag="-mios-version-min=${IOS_MIN}" ;;
+      cfg_target="ios64-xcrun"
+      min_flag="-mios-version-min=${IOS_MIN}"
+      cc_override="" ;;
     SIMULATORARM64)
-      cfg_target="iossimulator-xcrun"; arch="arm64";  min_flag="-mios-simulator-version-min=${IOS_MIN}" ;;
+      cfg_target="iossimulator-xcrun"
+      min_flag="-mios-simulator-version-min=${IOS_MIN}"
+      cc_override="CC=xcrun -sdk iphonesimulator cc -arch arm64" ;;
     SIMULATOR64)
-      cfg_target="iossimulator-xcrun"; arch="x86_64"; min_flag="-mios-simulator-version-min=${IOS_MIN}" ;;
+      cfg_target="iossimulator-xcrun"
+      min_flag="-mios-simulator-version-min=${IOS_MIN}"
+      cc_override="CC=xcrun -sdk iphonesimulator cc -arch x86_64" ;;
     *)
       error "Unknown iOS slice: $name (use OS64, SIMULATORARM64 or SIMULATOR64)" ;;
   esac
@@ -89,16 +99,14 @@ build_slice() {
   local src_dir="$WORK_DIR/${name}/openssl-${OPENSSL_VERSION}"
   local out_dir="$OUTPUT_DIR/${name}"
 
-  banner "Building OpenSSL — ios/${name} (${cfg_target}${arch:+ -arch $arch})"
+  banner "Building OpenSSL — ios/${name} (${cfg_target}${cc_override:+, ${cc_override#CC=}})"
 
   rm -rf "$WORK_DIR/${name}" "$out_dir"
   mkdir -p "$WORK_DIR/${name}" "$out_dir"
   tar -xzf "$WORK_DIR/$TARBALL" -C "$WORK_DIR/${name}"
 
-  # Extra args become cflags; for the simulator we pin the arch explicitly
-  # (iossimulator-xcrun leaves it to the host default otherwise).
   local extra=("$min_flag")
-  [[ -n "$arch" ]] && extra+=("-arch" "$arch")
+  [[ -n "$cc_override" ]] && extra+=("$cc_override")
 
   pushd "$src_dir" >/dev/null
   ./Configure "$cfg_target" \
