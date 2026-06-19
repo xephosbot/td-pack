@@ -57,6 +57,54 @@
     },
 
     {
+      "name": "ios-static-base",
+      "hidden": true,
+      "inherits": "static-base",
+      "description": "iOS cross-compile via td's bundled toolchain. Needs prepare_cross_compiling (host codegen) to have run first — that orchestration stays in the driver.",
+      "toolchainFile": "${sourceDir}/td/CMake/iOS.cmake",
+      "cacheVariables": {
+        "TD_ENABLE_LTO": "OFF",
+        "CMAKE_MAKE_PROGRAM": "/usr/bin/make"
+      }
+    },
+    {
+      "name": "ios-arm64",
+      "inherits": "ios-static-base",
+      "cacheVariables": {
+        "IOS_PLATFORM": "OS",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "OPENSSL_ROOT_DIR": "${sourceDir}/third_party/openssl/ios/OS64",
+        "OPENSSL_CRYPTO_LIBRARY": "${sourceDir}/third_party/openssl/ios/OS64/lib/libcrypto.a",
+        "OPENSSL_SSL_LIBRARY": "${sourceDir}/third_party/openssl/ios/OS64/lib/libssl.a",
+        "OPENSSL_INCLUDE_DIR": "${sourceDir}/third_party/openssl/ios/OS64/include"
+      }
+    },
+    {
+      "name": "ios-arm64-simulator",
+      "inherits": "ios-static-base",
+      "cacheVariables": {
+        "IOS_PLATFORM": "SIMULATOR",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "OPENSSL_ROOT_DIR": "${sourceDir}/third_party/openssl/ios/SIMULATORARM64",
+        "OPENSSL_CRYPTO_LIBRARY": "${sourceDir}/third_party/openssl/ios/SIMULATORARM64/lib/libcrypto.a",
+        "OPENSSL_SSL_LIBRARY": "${sourceDir}/third_party/openssl/ios/SIMULATORARM64/lib/libssl.a",
+        "OPENSSL_INCLUDE_DIR": "${sourceDir}/third_party/openssl/ios/SIMULATORARM64/include"
+      }
+    },
+    {
+      "name": "ios-x86_64-simulator",
+      "inherits": "ios-static-base",
+      "cacheVariables": {
+        "IOS_PLATFORM": "SIMULATOR",
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
+        "OPENSSL_ROOT_DIR": "${sourceDir}/third_party/openssl/ios/SIMULATOR64",
+        "OPENSSL_CRYPTO_LIBRARY": "${sourceDir}/third_party/openssl/ios/SIMULATOR64/lib/libcrypto.a",
+        "OPENSSL_SSL_LIBRARY": "${sourceDir}/third_party/openssl/ios/SIMULATOR64/lib/libssl.a",
+        "OPENSSL_INCLUDE_DIR": "${sourceDir}/third_party/openssl/ios/SIMULATOR64/include"
+      }
+    },
+
+    {
       "name": "macos-arm64-jni",
       "inherits": "jni-base",
       "cacheVariables": {
@@ -82,6 +130,10 @@
     { "name": "macos-arm64-static",  "configurePreset": "macos-arm64-static",  "targets": ["tdjson_static"] },
     { "name": "macos-x86_64-static", "configurePreset": "macos-x86_64-static", "targets": ["tdjson_static"] },
     { "name": "linux-static",        "configurePreset": "linux-static",        "targets": ["tdjson_static"] },
+
+    { "name": "ios-arm64",           "configurePreset": "ios-arm64",           "targets": ["tdjson_static"] },
+    { "name": "ios-arm64-simulator", "configurePreset": "ios-arm64-simulator", "targets": ["tdjson_static"] },
+    { "name": "ios-x86_64-simulator","configurePreset": "ios-x86_64-simulator","targets": ["tdjson_static"] },
 
     { "name": "macos-arm64-jni",     "configurePreset": "macos-arm64-jni",     "targets": ["tdjni"] },
     { "name": "macos-x86_64-jni",    "configurePreset": "macos-x86_64-jni",    "targets": ["tdjni"] },
