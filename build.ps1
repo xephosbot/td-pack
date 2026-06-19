@@ -72,13 +72,11 @@ switch ($Platform) {
     'windows-arm64' { $CmakeArch = 'ARM64';  $VcpkgArch = 'arm64'; $OutSuffix = 'arm64' }
 }
 
-# JNI builds use static-md triplet so OpenSSL/zlib are statically linked into
-# the shared library, making it portable.
-if ($Target -eq 'tdlib_jni') {
-    $VcpkgTriplet = "${VcpkgArch}-windows-static-md"
-} else {
-    $VcpkgTriplet = "${VcpkgArch}-windows"
-}
+# Both targets use the static-md triplet (static OpenSSL/zlib, dynamic UCRT):
+#   * JNI    — embeds OpenSSL/zlib into the portable .dll;
+#   * static — bundles libcrypto/libssl/zlib .lib into the archive so the
+#              consumer links a fully self-contained TDLib (no runtime DLLs).
+$VcpkgTriplet = "${VcpkgArch}-windows-static-md"
 
 # ── Detect parallelism ────────────────────────────────────────────────────────
 $Nproc = [Environment]::ProcessorCount
@@ -244,6 +242,13 @@ function Build-Static {
 
     New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
+    # gperf lives in the plain x64-windows triplet (host tool); the static-md
+    # build triplet doesn't carry it, so point CMake at it explicitly.
+    $GperfExe = Join-Path $VcpkgDir "installed\${VcpkgArch}-windows\tools\gperf\gperf.exe"
+    if (-not (Test-Path $GperfExe)) {
+        Write-Fail "gperf not found at $GperfExe — did vcpkg install gperf:${VcpkgArch}-windows succeed?"
+    }
+
     # Ninja + clang-cl (Get-ToolchainArgs). Release, not MinSizeRel:
     # with td's function-level sections, /O1 produces more COMDAT sections →
     # larger, less-compressible .lib (measured).
@@ -254,7 +259,8 @@ function Build-Static {
         '-DTD_ENABLE_JNI=OFF',
         '-DOPENSSL_USE_STATIC_LIBS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
-        "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet"
+        "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet",
+        "-DGPERF_EXECUTABLE=$GperfExe"
     ))
 
     Invoke-Cmd cmake @(
@@ -284,9 +290,23 @@ function Build-Static {
         Where-Object { $_.BaseName -match $shipPattern } |
         Sort-Object Name -Unique
     if (-not $shipped) { Write-Fail "No shippable .lib found under $BuildSub" }
-    Write-Info "Shipping $($shipped.Count) libs:"
+    Write-Info "Shipping $($shipped.Count) TDLib libs:"
     foreach ($lib in $shipped) {
         Copy-Item $lib.FullName -Destination $OutLib -Force -Verbose
+    }
+
+    # Bundle the static OpenSSL + zlib .lib from the vcpkg static-md triplet so
+    # the archive is self-contained (consumer links TDLib without any runtime
+    # DLLs). These live in the vcpkg 'installed' tree, not the build tree.
+    $VcpkgLib = Join-Path $VcpkgDir "installed\$VcpkgTriplet\lib"
+    $deps = @('libcrypto.lib', 'libssl.lib', 'zlib.lib')
+    foreach ($d in $deps) {
+        $src = Join-Path $VcpkgLib $d
+        if (Test-Path $src) {
+            Copy-Item $src -Destination $OutLib -Force -Verbose
+        } else {
+            Write-Fail "Expected dependency lib not found: $src (triplet $VcpkgTriplet)"
+        }
     }
 
     # Strip debug info from the shipped .lib files

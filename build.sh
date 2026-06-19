@@ -265,11 +265,13 @@ build_desktop_static() {
     cp -v "$openssl_root/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
     cp -v "$openssl_root/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
   else
-    # Linux: copy system OpenSSL .a if available
+    # Linux: bundle the system static OpenSSL + zlib (.a) so the archive is
+    # self-contained — the consumer links TDLib without needing -lssl/-lz.
     for d in /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/lib; do
       if [[ -f "$d/libcrypto.a" ]]; then
         cp -v "$d/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
         cp -v "$d/libssl.a" "$out_dir/lib" 2>/dev/null || true
+        [[ -f "$d/libz.a" ]] && cp -v "$d/libz.a" "$out_dir/lib" 2>/dev/null || true
         break
       fi
     done
