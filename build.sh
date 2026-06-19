@@ -91,6 +91,17 @@ else
   NPROC=4
 fi
 
+# ── Release flags for the shipped STATIC libraries ─────────────────────────────
+# Reproduce CMake's GCC/Clang Release defaults (-O3 -DNDEBUG) and add
+# -fno-function-sections/-fno-data-sections. td puts -ffunction-sections in
+# CMAKE_CXX_FLAGS; per-config flags below come later on the command line, so the
+# negative wins. This collapses the per-function section-header + section-name +
+# relocation metadata that dominates the archive (~50% of the uncompressed size).
+# Only for static dist — JNI keeps function-sections so its linked .so/.dylib can
+# --gc-sections at function granularity. Trade-off: the consumer dead-strips at
+# object, not function, granularity.
+STATIC_RELEASE_FLAGS="-O3 -DNDEBUG -fno-function-sections -fno-data-sections"
+
 # ── Step 1: Init submodule ────────────────────────────────────────────────────
 banner "Initialising TDLib submodule"
 git -C "$PROJECT_ROOT" submodule update --init --depth=1 td
@@ -159,6 +170,41 @@ prepare_cross_compiling() {
   success "Native code generator ready"
 }
 
+# ── Helper: strip static libraries in-place ────────────────────────────────────
+# Static .a archives ship pre-link object code; ~20% of their size is the local
+# symbol table, which the consumer's linker never needs.  Drop it (keeping the
+# global symbols required for linking) so the published archives are smaller.
+#   GNU strip  : --strip-unneeded  (keeps globals, removes locals + debug)
+#   Apple strip: -x -S             (-x removes non-globals, -S removes debug)
+# ranlib is re-run afterwards so the archive symbol index stays valid.
+strip_static_libs() {
+  local lib_dir="$1"
+  shopt -s nullglob
+  local libs=("$lib_dir"/*.a)
+  shopt -u nullglob
+  if [[ ${#libs[@]} -eq 0 ]]; then
+    warn "No .a files to strip in $lib_dir"
+    return 0
+  fi
+
+  banner "Stripping ${#libs[@]} static libraries"
+  local before after lib
+  before=$(du -sk "$lib_dir" | cut -f1)
+
+  for lib in "${libs[@]}"; do
+    if [[ "$(uname)" == "Darwin" ]]; then
+      strip -x -S "$lib" 2>/dev/null && ranlib "$lib" 2>/dev/null \
+        || warn "strip/ranlib failed for $(basename "$lib") — kept as-is"
+    else
+      strip --strip-unneeded "$lib" 2>/dev/null && ranlib "$lib" 2>/dev/null \
+        || warn "strip/ranlib failed for $(basename "$lib") — kept as-is"
+    fi
+  done
+
+  after=$(du -sk "$lib_dir" | cut -f1)
+  success "Static libs stripped: $((before / 1024)) MB → $((after / 1024)) MB"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Platform-specific build functions
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -176,23 +222,25 @@ build_desktop_static() {
   local extra_args=()
 
   if [[ "$os" == "macos" ]]; then
-    local openssl_root
-    if [[ "$arch" == "arm64" ]]; then
-      openssl_root="/opt/homebrew/opt/openssl"
-    else
-      openssl_root="/usr/local/opt/openssl"
-    fi
-    [[ -d "$openssl_root" ]] || error "OpenSSL not found at $openssl_root. Install via brew."
+    # OpenSSL is built from source per-arch (no Homebrew, no Rosetta) by
+    # scripts/build-openssl-macos.sh → third_party/openssl/macos/<arch>.
+    local openssl_root="$PROJECT_ROOT/third_party/openssl/macos/${arch}"
+    [[ -d "$openssl_root" ]] || error "OpenSSL for macos/${arch} not found at $openssl_root.\n" \
+      "Run: ./scripts/build-openssl-macos.sh ${arch}"
     extra_args+=(
       "-DOPENSSL_ROOT_DIR=${openssl_root}"
       "-DCMAKE_OSX_ARCHITECTURES=${arch}"
     )
   fi
 
+  # Release, not MinSizeRel: with td's -ffunction-sections, -Os inlines less →
+  # more per-function sections/relocations → larger AND less-compressible .a.
   mkdir -p "$build_subdir"
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
         -DTD_ENABLE_JNI=OFF \
         -DOPENSSL_USE_STATIC_LIBS=ON \
         "${extra_args[@]}" \
@@ -217,15 +265,20 @@ build_desktop_static() {
     cp -v "$openssl_root/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
     cp -v "$openssl_root/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
   else
-    # Linux: copy system OpenSSL .a if available
+    # Linux: bundle the system static OpenSSL + zlib (.a) so the archive is
+    # self-contained — the consumer links TDLib without needing -lssl/-lz.
     for d in /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/lib; do
       if [[ -f "$d/libcrypto.a" ]]; then
         cp -v "$d/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
         cp -v "$d/libssl.a" "$out_dir/lib" 2>/dev/null || true
+        [[ -f "$d/libz.a" ]] && cp -v "$d/libz.a" "$out_dir/lib" 2>/dev/null || true
         break
       fi
     done
   fi
+
+  # Strip local symbols/debug from all .a (incl. OpenSSL) to shrink the archive
+  strip_static_libs "$out_dir/lib"
 
   # Copy specific headers
   cp -v "$build_subdir/td/telegram/tdjson_export.h" "$out_dir/include/td/telegram" 2>/dev/null || true
@@ -248,13 +301,11 @@ build_desktop_jni() {
   local extra_args=()
 
   if [[ "$os" == "macos" ]]; then
-    local openssl_root
-    if [[ "$arch" == "arm64" ]]; then
-      openssl_root="/opt/homebrew/opt/openssl"
-    else
-      openssl_root="/usr/local/opt/openssl"
-    fi
-    [[ -d "$openssl_root" ]] || error "OpenSSL not found at $openssl_root. Install via brew."
+    # OpenSSL is built from source per-arch (no Homebrew, no Rosetta) by
+    # scripts/build-openssl-macos.sh → third_party/openssl/macos/<arch>.
+    local openssl_root="$PROJECT_ROOT/third_party/openssl/macos/${arch}"
+    [[ -d "$openssl_root" ]] || error "OpenSSL for macos/${arch} not found at $openssl_root.\n" \
+      "Run: ./scripts/build-openssl-macos.sh ${arch}"
     extra_args+=(
       "-DOPENSSL_ROOT_DIR=${openssl_root}"
       "-DCMAKE_OSX_ARCHITECTURES=${arch}"
@@ -431,6 +482,8 @@ build_ios_static() {
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
         -DCMAKE_TOOLCHAIN_FILE="$ios_toolchain" \
         -DIOS_PLATFORM="$ios_platform" \
         -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \
@@ -460,6 +513,9 @@ build_ios_static() {
   # Copy OpenSSL static libraries
   cp -v "$openssl_plat_dir/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
   cp -v "$openssl_plat_dir/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
+
+  # Strip local symbols/debug from all .a (incl. OpenSSL) to shrink the archive
+  strip_static_libs "$out_dir/lib"
 
   # Copy specific headers
   cp -v "$build_subdir/td/telegram/tdjson_export.h" "$out_dir/include/td/telegram" 2>/dev/null || true

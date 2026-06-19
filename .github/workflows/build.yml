@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Which platform group to build (for fast iteration). Tag pushes always build all."
+        type: choice
+        default: all
+        options: [all, windows, linux, macos, android, ios]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -48,10 +54,12 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────
   #  macOS  (arm64 + x86_64) × (static + JNI) = 4 builds
-  #  Runners:  macos-15       → Apple Silicon (arm64)
-  #            macos-15       → x86_64 (cross-compiled on ARM with Rosetta OpenSSL)
+  #  Runner:  macos-15 (Apple Silicon) for both arches.
+  #  x86_64 is a native clang cross-compile (-arch x86_64); OpenSSL is built
+  #  from source per-arch via scripts/build-openssl-macos.sh (cached, no Rosetta).
   # ─────────────────────────────────────────────────────────────────────────────
   macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'macos'
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.artifact }}
     strategy:
@@ -88,13 +96,7 @@ jobs:
           submodules: recursive
 
       - name: Install dependencies
-        run: |
-          brew install gperf cmake openssl ccache
-          # For x86_64 cross-compilation on ARM runner, install x86_64 OpenSSL via Rosetta
-          if [[ "${{ matrix.platform }}" == "macos-x86_64" ]]; then
-            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
-            arch -x86_64 /usr/local/bin/brew install openssl
-          fi
+        run: brew install gperf cmake ccache
 
       - name: Setup Java (JNI only)
         if: matrix.target == 'tdlib_jni'
@@ -102,6 +104,18 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      # OpenSSL built from source for both arches (no Rosetta), cached together
+      - name: Cache OpenSSL for macOS
+        id: cache-openssl-macos
+        uses: actions/cache@v4
+        with:
+          path: third_party/openssl/macos
+          key: openssl-macos-${{ hashFiles('scripts/build-openssl-macos.sh') }}
+
+      - name: Build OpenSSL for macOS (arm64 + x86_64)
+        if: steps.cache-openssl-macos.outputs.cache-hit != 'true'
+        run: ./scripts/build-openssl-macos.sh
 
       - name: Cache ccache
         uses: actions/cache@v4
@@ -140,6 +154,7 @@ jobs:
   #  JNI builds use clang-18 + libc++ per official TDLib instructions
   # ─────────────────────────────────────────────────────────────────────────────
   linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'linux'
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.artifact }}
     strategy:
@@ -237,9 +252,11 @@ jobs:
   #  Windows  (x64 + arm64) × (static + JNI) = 4 builds
   #  Runners:  windows-latest  → x64
   #            windows-11-arm  → arm64  (native)
-  #  Dependencies via vcpkg (pinned commit bc3512a)
+  #  Toolchain: Ninja + clang-cl + ccache (leaner .lib, cached compilation).
+  #  Dependencies via vcpkg (pinned commit bc3512a, MSVC-ABI triplets).
   # ─────────────────────────────────────────────────────────────────────────────
   windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'windows'
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.artifact }}
     strategy:
@@ -251,24 +268,28 @@ jobs:
             platform: windows-x64
             artifact: tdlib-windows-x64
             out:      out\windows\x64
+            vcvars:   amd64
 
           - runner:   windows-latest
             target:   tdlib_jni
             platform: windows-x64
             artifact: tdlib-windows-jni-x64
             out:      out\windows-jni\x64
+            vcvars:   amd64
 
           - runner:   windows-11-arm
             target:   tdlib
             platform: windows-arm64
             artifact: tdlib-windows-arm64
             out:      out\windows\arm64
+            vcvars:   arm64
 
           - runner:   windows-11-arm
             target:   tdlib_jni
             platform: windows-arm64
             artifact: tdlib-windows-jni-arm64
             out:      out\windows-jni\arm64
+            vcvars:   arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -282,6 +303,27 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Ninja + clang-cl need the MSVC toolchain env (headers, libs, linker, ABI).
+      # The VS generator set this up implicitly; Ninja does not, so import the
+      # Developer Command Prompt vars for the target arch.
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.vcvars }}
+
+      - name: Install CMake + Ninja
+        uses: lukka/get-cmake@latest
+
+      # Compilation cache — the main lever for Windows build time. td wires up
+      # ccache itself (RULE_LAUNCH_COMPILE) when it finds it on PATH; this step
+      # installs ccache and persists its store across runs via the Actions cache.
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          variant: ccache
+          key: ccache-${{ matrix.artifact }}
+          max-size: 2G
+
       # Cache vcpkg installed packages (keyed on pinned commit + target type)
       - name: Cache vcpkg packages
         uses: actions/cache@v4
@@ -291,6 +333,10 @@ jobs:
 
       - name: Build
         run: .\build.ps1 -Target ${{ matrix.target }} -Platform ${{ matrix.platform }}
+
+      - name: ccache stats
+        if: always()
+        run: ccache --show-stats
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -307,6 +353,7 @@ jobs:
   #  Two-pass strategy (prepare_cross_compiling) is handled inside build.sh.
   # ─────────────────────────────────────────────────────────────────────────────
   android:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'android'
     runs-on: ubuntu-latest
     name: tdlib-android-${{ matrix.abi }}
     strategy:
@@ -388,6 +435,7 @@ jobs:
   #  Toolchain: td/CMake/iOS.cmake (bundled in submodule)
   # ─────────────────────────────────────────────────────────────────────────────
   ios:
+    if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'ios'
     runs-on: macos-15
     name: tdlib-ios-${{ matrix.arch }}
     strategy:
@@ -420,7 +468,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/openssl/ios
-          key: openssl-ios-${{ hashFiles('scripts/build-openssl-ios.sh', 'patches/ios-openssl-triple-fix.patch') }}
+          key: openssl-ios-${{ hashFiles('scripts/build-openssl-ios.sh') }}
 
       - name: Build OpenSSL for iOS (all platforms)
         if: steps.cache-openssl-ios.outputs.cache-hit != 'true'
@@ -456,10 +504,13 @@ jobs:
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
-  #  Release — collect all 19 artifacts, package as .tar.gz, publish
+  #  Release — collect all 19 artifacts, package as .tar.zst, publish
   # ─────────────────────────────────────────────────────────────────────────────
   release:
     needs: [version, macos, linux, windows, android, ios]
+    # Publish only on tag pushes. workflow_dispatch runs build + upload the
+    # artifacts (sizes visible in the run) without touching any GitHub Release.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -470,23 +521,27 @@ jobs:
         with:
           path: artifacts
 
-      - name: Package artifacts as .tar.gz
+      - name: Package artifacts as .tar.zst
         run: |
           mkdir -p release
+          # zstd -19 beats gzip by ~40% on these symbol/metadata-heavy archives
+          # while staying fast to decompress (zstd-jni on the consumer side).
+          export ZSTD_CLEVEL=19
+          export ZSTD_NBTHREADS=0   # use all cores
 
           for dir in artifacts/tdlib-*; do
             [ -d "$dir" ] || continue
             name=$(basename "$dir")
 
             # Create archive with lib/ and include/ at root (no extra directory prefix)
-            tar -czf "release/${name}.tar.gz" -C "$dir" .
+            tar --zstd -cf "release/${name}.tar.zst" -C "$dir" .
 
-            size=$(du -sh "release/${name}.tar.gz" | cut -f1)
-            echo "  ✓ ${name}.tar.gz  (${size})"
+            size=$(du -sh "release/${name}.tar.zst" | cut -f1)
+            echo "  ✓ ${name}.tar.zst  (${size})"
           done
 
           echo ""
-          echo "Total packages: $(ls release/*.tar.gz | wc -l)"
+          echo "Total packages: $(ls release/*.tar.zst | wc -l)"
           ls -lh release/
 
       - name: Copy td_api schema to release
@@ -509,10 +564,10 @@ jobs:
           )
           missing=0
           for name in "${EXPECTED[@]}"; do
-            if [[ -f "release/${name}.tar.gz" ]]; then
-              echo "  ✓ ${name}.tar.gz"
+            if [[ -f "release/${name}.tar.zst" ]]; then
+              echo "  ✓ ${name}.tar.zst"
             else
-              echo "  ✗ MISSING: ${name}.tar.gz"
+              echo "  ✗ MISSING: ${name}.tar.zst"
               missing=$((missing + 1))
             fi
           done
@@ -543,7 +598,7 @@ jobs:
 
             Download URL pattern:
             ```
-            https://github.com/${{ github.repository }}/releases/download/v${{ needs.version.outputs.tdlib_version }}/{asset}.tar.gz
+            https://github.com/${{ github.repository }}/releases/download/v${{ needs.version.outputs.tdlib_version }}/{asset}.tar.zst
             ```
 
             ---
@@ -552,30 +607,30 @@ jobs:
 
             | Asset | Platform |
             |---|---|
-            | `tdlib-macos-arm64.tar.gz` | macOS Apple Silicon |
-            | `tdlib-macos-x86_64.tar.gz` | macOS Intel |
-            | `tdlib-linux-arm64.tar.gz` | Linux arm64 |
-            | `tdlib-linux-x86_64.tar.gz` | Linux x86_64 |
-            | `tdlib-windows-arm64.tar.gz` | Windows arm64 |
-            | `tdlib-windows-x64.tar.gz` | Windows x64 |
-            | `tdlib-ios-arm64.tar.gz` | iOS device (arm64) |
-            | `tdlib-ios-arm64-simulator.tar.gz` | iOS Simulator (arm64) |
-            | `tdlib-ios-x86_64-simulator.tar.gz` | iOS Simulator (x86_64) |
+            | `tdlib-macos-arm64.tar.zst` | macOS Apple Silicon |
+            | `tdlib-macos-x86_64.tar.zst` | macOS Intel |
+            | `tdlib-linux-arm64.tar.zst` | Linux arm64 |
+            | `tdlib-linux-x86_64.tar.zst` | Linux x86_64 |
+            | `tdlib-windows-arm64.tar.zst` | Windows arm64 |
+            | `tdlib-windows-x64.tar.zst` | Windows x64 |
+            | `tdlib-ios-arm64.tar.zst` | iOS device (arm64) |
+            | `tdlib-ios-arm64-simulator.tar.zst` | iOS Simulator (arm64) |
+            | `tdlib-ios-x86_64-simulator.tar.zst` | iOS Simulator (x86_64) |
 
             ### JNI shared libraries — JVM / Android
 
             | Asset | Platform |
             |---|---|
-            | `tdlib-macos-jni-arm64.tar.gz` | macOS Apple Silicon |
-            | `tdlib-macos-jni-x86_64.tar.gz` | macOS Intel |
-            | `tdlib-linux-jni-arm64.tar.gz` | Linux arm64 |
-            | `tdlib-linux-jni-x86_64.tar.gz` | Linux x86_64 |
-            | `tdlib-windows-jni-arm64.tar.gz` | Windows arm64 |
-            | `tdlib-windows-jni-x64.tar.gz` | Windows x64 |
-            | `tdlib-android-arm64-v8a.tar.gz` | Android arm64-v8a |
-            | `tdlib-android-armeabi-v7a.tar.gz` | Android armeabi-v7a |
-            | `tdlib-android-x86_64.tar.gz` | Android x86_64 |
-            | `tdlib-android-x86.tar.gz` | Android x86 |
+            | `tdlib-macos-jni-arm64.tar.zst` | macOS Apple Silicon |
+            | `tdlib-macos-jni-x86_64.tar.zst` | macOS Intel |
+            | `tdlib-linux-jni-arm64.tar.zst` | Linux arm64 |
+            | `tdlib-linux-jni-x86_64.tar.zst` | Linux x86_64 |
+            | `tdlib-windows-jni-arm64.tar.zst` | Windows arm64 |
+            | `tdlib-windows-jni-x64.tar.zst` | Windows x64 |
+            | `tdlib-android-arm64-v8a.tar.zst` | Android arm64-v8a |
+            | `tdlib-android-armeabi-v7a.tar.zst` | Android armeabi-v7a |
+            | `tdlib-android-x86_64.tar.zst` | Android x86_64 |
+            | `tdlib-android-x86.tar.zst` | Android x86 |
 
             ---
 
@@ -596,7 +651,7 @@ jobs:
             |---|---|
             | `td-api-v${{ needs.version.outputs.tdlib_version }}.tl` | TDLib public API schema |
           files: |
-            release/*.tar.gz
+            release/*.tar.zst
             release/*.tl
           draft: false
           prerelease: false

@@ -68,7 +68,8 @@ You can also build locally using the included scripts.
 
 **macOS:**
 - Xcode (provides the compiler, SDK, and `make`)
-- OpenSSL via Homebrew (`brew install openssl`)
+- `gperf`, `cmake` via Homebrew (`brew install gperf cmake`)
+- Pre-built OpenSSL at `third_party/openssl/macos/<arch>/` — build it with `./scripts/build-openssl-macos.sh` (arm64 + x86_64, from source, no Rosetta)
 
 **Linux:**
 - OpenSSL dev package (`apt install libssl-dev` or equivalent)

@@ -72,17 +72,62 @@ switch ($Platform) {
     'windows-arm64' { $CmakeArch = 'ARM64';  $VcpkgArch = 'arm64'; $OutSuffix = 'arm64' }
 }
 
-# JNI builds use static-md triplet so OpenSSL/zlib are statically linked into
-# the shared library, making it portable.
-if ($Target -eq 'tdlib_jni') {
-    $VcpkgTriplet = "${VcpkgArch}-windows-static-md"
-} else {
-    $VcpkgTriplet = "${VcpkgArch}-windows"
-}
+# Both targets use the static-md triplet (static OpenSSL/zlib, dynamic UCRT):
+#   * JNI    — embeds OpenSSL/zlib into the portable .dll;
+#   * static — bundles libcrypto/libssl/zlib .lib into the archive so the
+#              consumer links a fully self-contained TDLib (no runtime DLLs).
+$VcpkgTriplet = "${VcpkgArch}-windows-static-md"
 
 # ── Detect parallelism ────────────────────────────────────────────────────────
 $Nproc = [Environment]::ProcessorCount
 if (-not $Nproc -or $Nproc -lt 1) { $Nproc = 4 }
+
+# ── Toolchain: Ninja + clang-cl ────────────────────────────────────────────────
+# We build with the Ninja generator and clang-cl instead of the MSVC/MSBuild
+# generator for two reasons:
+#   * size  — clang produces far leaner static .lib than cl.exe (MSVC tdcore.lib
+#             was ~536 MB vs ~100 MB for the same code under clang on Linux);
+#   * speed — Ninja enables td's built-in ccache launcher to cache compilation
+#             (MSBuild does not cache cleanly).
+# clang-cl is ABI-compatible with MSVC, so vcpkg's *-windows triplets still work.
+# The arch is taken from the Developer Command Prompt environment (set by the CI
+# 'msvc-dev-cmd' step or a local VS prompt), so no -A/--target is needed.
+# We do NOT set CMAKE_*_COMPILER_LAUNCHER here: td already wires up ccache via
+# RULE_LAUNCH_COMPILE when it finds ccache, and stacking a second launcher
+# (e.g. sccache) produces a broken "ccache sccache clang-cl" command line.
+function Find-ClangCl {
+    # Escape hatch: set TDPACK_USE_CLANG=0 to force MSVC cl.exe (e.g. if clang-cl
+    # hits a known arm64 codegen bug). ccache/Ninja still apply, so speed is kept.
+    if ($env:TDPACK_USE_CLANG -in @('0', 'false', 'off')) {
+        Write-Info 'TDPACK_USE_CLANG disabled — using MSVC cl.exe'
+        return $null
+    }
+    $c = Get-Command clang-cl -ErrorAction SilentlyContinue
+    if ($c) { return $c.Source }
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles} 'LLVM\bin\clang-cl.exe')
+    )
+    foreach ($vs in @('Enterprise','Professional','Community','BuildTools')) {
+        $candidates += "${env:ProgramFiles}\Microsoft Visual Studio\2022\$vs\VC\Tools\Llvm\x64\bin\clang-cl.exe"
+        $candidates += "${env:ProgramFiles}\Microsoft Visual Studio\2022\$vs\VC\Tools\Llvm\bin\clang-cl.exe"
+    }
+    foreach ($p in $candidates) { if (Test-Path $p) { return $p } }
+    return $null
+}
+
+function Get-ToolchainArgs {
+    $a = @('-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release')
+    $clang = Find-ClangCl
+    if ($clang) {
+        $clangFwd = $clang -replace '\\', '/'
+        Write-Info "Compiler: clang-cl ($clang)"
+        $a += @("-DCMAKE_C_COMPILER=$clangFwd", "-DCMAKE_CXX_COMPILER=$clangFwd")
+    } else {
+        Write-Warn 'clang-cl not found — falling back to MSVC cl.exe (size win lost, ccache still applies)'
+        $a += @('-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl')
+    }
+    return $a
+}
 
 # ── Step 1: Init git submodule ────────────────────────────────────────────────
 Write-Banner 'Initialising TDLib submodule'
@@ -124,29 +169,67 @@ foreach ($pkg in $VcpkgPackages) {
 }
 Write-Ok 'vcpkg packages installed'
 
-# ── Step 3: Apply patch (JNI only) ────────────────────────────────────────────
-function Invoke-Patch {
-    Write-Banner 'Applying native-bridge-jni patch'
+# ── Step 3: Apply a build-time patch to the td submodule (idempotent) ──────────
+function Invoke-TdPatch {
+    param([string]$Patch, [string]$Label)
+    Write-Banner "Applying $Label patch"
 
-    if (-not (Test-Path $PatchFile)) {
-        Write-Fail "Patch file not found: $PatchFile"
+    if (-not (Test-Path $Patch)) {
+        Write-Fail "Patch file not found: $Patch"
     }
 
-    # Check if already applied (reverse check)
-    $reverseCheck = & git -C $TdDir apply --check --reverse $PatchFile 2>&1
+    # Already applied? (reverse check succeeds)
+    & git -C $TdDir apply --check --reverse $Patch 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) {
         Write-Info 'Patch already applied, skipping'
         return
     }
 
-    # Verify applies cleanly
-    $forwardCheck = & git -C $TdDir apply --check $PatchFile 2>&1
+    # Verify it applies cleanly
+    $forwardCheck = & git -C $TdDir apply --check $Patch 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Patch does not apply cleanly to td/. Resolve conflicts manually.`n$forwardCheck"
     }
 
-    Invoke-Cmd git @('-C', $TdDir, 'apply', $PatchFile)
+    Invoke-Cmd git @('-C', $TdDir, 'apply', $Patch)
     Write-Ok 'Patch applied'
+}
+
+# clang-cl support: td's TdSetUpCompiler.cmake routes clang-cl into its GNU
+# Clang path (-std=c++17), which clang-cl's cl-style driver rejects. This
+# one-line build-time patch makes clang-cl (MSVC=true) use td's MSVC flag path
+# instead. No-op for real MSVC and for GNU clang/gcc on Linux/macOS.
+$ClangClPatch = Join-Path $ProjectRoot 'patches\clang-cl-support.patch'
+
+# ── Helper: strip static libraries in-place ────────────────────────────────────
+# MSVC ships no 'strip'; LLVM's llvm-objcopy understands COFF archives.  We only
+# drop debug info (safe — keeps every symbol needed for linking).  The bulk of
+# the Windows size reduction comes from the explicit lib list in Build-Static
+# and MinSizeRel, not from this step, so a missing llvm-objcopy is non-fatal.
+function Optimize-StaticLibs {
+    param([string]$LibDir)
+
+    $libs = Get-ChildItem -Path $LibDir -Filter '*.lib' -ErrorAction SilentlyContinue
+    if (-not $libs) { Write-Warn "No .lib files to strip in $LibDir"; return }
+
+    $tool = Get-Command llvm-objcopy -ErrorAction SilentlyContinue
+    if (-not $tool) {
+        # Try the bundled VS/LLVM location before giving up.
+        $candidate = Join-Path ${env:ProgramFiles} 'LLVM\bin\llvm-objcopy.exe'
+        if (Test-Path $candidate) { $tool = $candidate } else { $tool = $null }
+    }
+    if (-not $tool) {
+        Write-Warn 'llvm-objcopy not found — skipping .lib strip (size unaffected)'
+        return
+    }
+
+    $before = [math]::Round(($libs | Measure-Object Length -Sum).Sum / 1MB, 1)
+    foreach ($lib in $libs) {
+        & $tool --strip-debug $lib.FullName 2>$null
+        if ($LASTEXITCODE -ne 0) { Write-Warn "strip-debug failed for $($lib.Name) — kept as-is" }
+    }
+    $after = [math]::Round((Get-ChildItem -Path $LibDir -Filter '*.lib' | Measure-Object Length -Sum).Sum / 1MB, 1)
+    Write-Ok "Static libs stripped: $before MB -> $after MB"
 }
 
 # ── Build functions ────────────────────────────────────────────────────────────
@@ -159,21 +242,30 @@ function Build-Static {
 
     New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
-    Invoke-Cmd cmake @(
-        '-A', $CmakeArch,
+    # gperf lives in the plain x64-windows triplet (host tool); the static-md
+    # build triplet doesn't carry it, so point CMake at it explicitly.
+    $GperfExe = Join-Path $VcpkgDir "installed\${VcpkgArch}-windows\tools\gperf\gperf.exe"
+    if (-not (Test-Path $GperfExe)) {
+        Write-Fail "gperf not found at $GperfExe — did vcpkg install gperf:${VcpkgArch}-windows succeed?"
+    }
+
+    # Ninja + clang-cl (Get-ToolchainArgs). Release, not MinSizeRel:
+    # with td's function-level sections, /O1 produces more COMDAT sections →
+    # larger, less-compressible .lib (measured).
+    Invoke-Cmd cmake (@(
         '-S', $TdDir,
-        '-B', $BuildSub,
-        "-DCMAKE_BUILD_TYPE=Release",
+        '-B', $BuildSub
+    ) + (Get-ToolchainArgs) + @(
         '-DTD_ENABLE_JNI=OFF',
         '-DOPENSSL_USE_STATIC_LIBS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
-        "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet"
-    )
+        "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet",
+        "-DGPERF_EXECUTABLE=$GperfExe"
+    ))
 
     Invoke-Cmd cmake @(
         '--build', $BuildSub,
         '--target', 'tdjson_static',
-        '--config', 'Release',
         '--parallel', "$Nproc"
     )
 
@@ -183,10 +275,42 @@ function Build-Static {
     New-Item -ItemType Directory -Force -Path $OutLib | Out-Null
     New-Item -ItemType Directory -Force -Path $OutInc | Out-Null
 
-    # Copy .lib files from build dir (Release config subdir on MSVC)
-    Get-ChildItem -Path $BuildSub -Recurse -Filter '*.lib' | ForEach-Object {
-        Copy-Item $_.FullName -Destination $OutLib -Force -Verbose
+    # Log every .lib in the build tree (path + size) so the windows-arm64 vs
+    # x64 size gap is visible in CI, then ship ONLY the TDLib static libs
+    # (td*.lib) plus OpenSSL/zlib — this excludes example/test/benchmark and
+    # stray dependency libs that the previous blanket recursive copy pulled in.
+    $allLibs = Get-ChildItem -Path $BuildSub -Recurse -Filter '*.lib'
+    Write-Info "All .lib under build tree ($($allLibs.Count)):"
+    $allLibs | Sort-Object Length -Descending | ForEach-Object {
+        Write-Host ('  {0,8:N1} MB  {1}' -f ($_.Length / 1MB), $_.FullName)
     }
+
+    $shipPattern = '^(td.*|libcrypto.*|libssl.*|crypto|ssl|zlib.*|zstd.*)$'
+    $shipped = $allLibs |
+        Where-Object { $_.BaseName -match $shipPattern } |
+        Sort-Object Name -Unique
+    if (-not $shipped) { Write-Fail "No shippable .lib found under $BuildSub" }
+    Write-Info "Shipping $($shipped.Count) TDLib libs:"
+    foreach ($lib in $shipped) {
+        Copy-Item $lib.FullName -Destination $OutLib -Force -Verbose
+    }
+
+    # Bundle the static OpenSSL + zlib .lib from the vcpkg static-md triplet so
+    # the archive is self-contained (consumer links TDLib without any runtime
+    # DLLs). These live in the vcpkg 'installed' tree, not the build tree.
+    $VcpkgLib = Join-Path $VcpkgDir "installed\$VcpkgTriplet\lib"
+    $deps = @('libcrypto.lib', 'libssl.lib', 'zlib.lib')
+    foreach ($d in $deps) {
+        $src = Join-Path $VcpkgLib $d
+        if (Test-Path $src) {
+            Copy-Item $src -Destination $OutLib -Force -Verbose
+        } else {
+            Write-Fail "Expected dependency lib not found: $src (triplet $VcpkgTriplet)"
+        }
+    }
+
+    # Strip debug info from the shipped .lib files
+    Optimize-StaticLibs -LibDir $OutLib
 
     # Copy specific headers
     $ExportHeader = Join-Path $BuildSub 'td\telegram\tdjson_export.h'
@@ -232,23 +356,21 @@ function Build-Jni {
     # the proper tdjni shared library (tdjsonjava.dll) with td_jni.cpp.
     # TD_PACK_STATIC_DEPS=ON ensures OpenSSL and zlib are statically linked so
     # the resulting DLL is portable (Windows does not ship either library).
-    Invoke-Cmd cmake @(
-        '-A', $CmakeArch,
+    Invoke-Cmd cmake (@(
         '-S', $ProjectRoot,
-        '-B', $BuildSub,
-        '-DCMAKE_BUILD_TYPE=Release',
+        '-B', $BuildSub
+    ) + (Get-ToolchainArgs) + @(
         '-DTD_ANDROID_JSON_JAVA=ON',
         '-DTD_PACK_STATIC_DEPS=ON',
         "-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain",
         "-DVCPKG_TARGET_TRIPLET=$VcpkgTriplet",
         "-DJAVA_HOME=$JavaHome",
         "-DGPERF_EXECUTABLE=$GperfExe"
-    )
+    ))
 
     Invoke-Cmd cmake @(
         '--build', $BuildSub,
         '--target', 'tdjni',
-        '--config', 'Release',
         '--parallel', "$Nproc"
     )
 
@@ -268,12 +390,17 @@ function Build-Jni {
 }
 
 # ── Dispatch ───────────────────────────────────────────────────────────────────
+# When building with clang-cl, patch td so it uses its MSVC flag path.
+if (Find-ClangCl) {
+    Invoke-TdPatch -Patch $ClangClPatch -Label 'clang-cl-support'
+}
+
 switch ($Target) {
     'tdlib' {
         Build-Static
     }
     'tdlib_jni' {
-        Invoke-Patch
+        Invoke-TdPatch -Patch $PatchFile -Label 'native-bridge-jni'
         Build-Jni
     }
 }
