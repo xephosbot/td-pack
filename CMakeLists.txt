@@ -9,6 +9,17 @@ set(TD_JNI_PACKAGE "io/xbot/tdlib" CACHE STRING
     "JNI package path slash-separated (e.g. io/xbot/tdlib)")
 
 option(TD_PACK_STATIC_DEPS "Prefer static libraries for dependencies (used by JNI builds)" OFF)
+option(TD_PACK_STATIC "Build TDLib static libraries for distribution (no JNI)" OFF)
+
+# Static distribution path: route through this root CMakeLists (so it can be
+# driven by CMakePresets) but otherwise just expose td's own targets
+# (tdjson_static + deps). td runs its own find_package(OpenSSL/ZLIB); the
+# preset/driver passes OPENSSL_ROOT_DIR + OPENSSL_USE_STATIC_LIBS. None of the
+# JNI-specific dependency juggling below applies.
+if (TD_PACK_STATIC)
+  add_subdirectory(${TD_DIR} td)
+  return()
+endif()
 
 # When building JNI shared libraries we need OpenSSL statically linked
 # inside the .so/.dylib so the result is portable.
