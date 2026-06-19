@@ -99,7 +99,7 @@ if (-not $Nproc -or $Nproc -lt 1) { $Nproc = 4 }
 # (e.g. sccache) produces a broken "ccache sccache clang-cl" command line.
 function Find-ClangCl {
     # Escape hatch: set TDPACK_USE_CLANG=0 to force MSVC cl.exe (e.g. if clang-cl
-    # hits a known arm64 codegen bug). sccache/Ninja still apply, so speed is kept.
+    # hits a known arm64 codegen bug). ccache/Ninja still apply, so speed is kept.
     if ($env:TDPACK_USE_CLANG -in @('0', 'false', 'off')) {
         Write-Info 'TDPACK_USE_CLANG disabled — using MSVC cl.exe'
         return $null
@@ -125,7 +125,7 @@ function Get-ToolchainArgs {
         Write-Info "Compiler: clang-cl ($clang)"
         $a += @("-DCMAKE_C_COMPILER=$clangFwd", "-DCMAKE_CXX_COMPILER=$clangFwd")
     } else {
-        Write-Warn 'clang-cl not found — falling back to MSVC cl.exe (size win lost, sccache still applies)'
+        Write-Warn 'clang-cl not found — falling back to MSVC cl.exe (size win lost, ccache still applies)'
         $a += @('-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl')
     }
     return $a
@@ -244,7 +244,7 @@ function Build-Static {
 
     New-Item -ItemType Directory -Force -Path $BuildSub | Out-Null
 
-    # Ninja + clang-cl + sccache (Get-ToolchainArgs). Release, not MinSizeRel:
+    # Ninja + clang-cl (Get-ToolchainArgs). Release, not MinSizeRel:
     # with td's function-level sections, /O1 produces more COMDAT sections →
     # larger, less-compressible .lib (measured).
     Invoke-Cmd cmake (@(

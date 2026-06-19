@@ -91,6 +91,17 @@ else
   NPROC=4
 fi
 
+# ── Release flags for the shipped STATIC libraries ─────────────────────────────
+# Reproduce CMake's GCC/Clang Release defaults (-O3 -DNDEBUG) and add
+# -fno-function-sections/-fno-data-sections. td puts -ffunction-sections in
+# CMAKE_CXX_FLAGS; per-config flags below come later on the command line, so the
+# negative wins. This collapses the per-function section-header + section-name +
+# relocation metadata that dominates the archive (~50% of the uncompressed size).
+# Only for static dist — JNI keeps function-sections so its linked .so/.dylib can
+# --gc-sections at function granularity. Trade-off: the consumer dead-strips at
+# object, not function, granularity.
+STATIC_RELEASE_FLAGS="-O3 -DNDEBUG -fno-function-sections -fno-data-sections"
+
 # ── Step 1: Init submodule ────────────────────────────────────────────────────
 banner "Initialising TDLib submodule"
 git -C "$PROJECT_ROOT" submodule update --init --depth=1 td
@@ -228,6 +239,8 @@ build_desktop_static() {
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
         -DTD_ENABLE_JNI=OFF \
         -DOPENSSL_USE_STATIC_LIBS=ON \
         "${extra_args[@]}" \
@@ -467,6 +480,8 @@ build_ios_static() {
   cmake -S "$TD_DIR" \
         -B "$build_subdir" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
         -DCMAKE_TOOLCHAIN_FILE="$ios_toolchain" \
         -DIOS_PLATFORM="$ios_platform" \
         -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \

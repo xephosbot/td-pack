@@ -252,7 +252,7 @@ jobs:
   #  Windows  (x64 + arm64) × (static + JNI) = 4 builds
   #  Runners:  windows-latest  → x64
   #            windows-11-arm  → arm64  (native)
-  #  Toolchain: Ninja + clang-cl + sccache (leaner .lib, cached compilation).
+  #  Toolchain: Ninja + clang-cl + ccache (leaner .lib, cached compilation).
   #  Dependencies via vcpkg (pinned commit bc3512a, MSVC-ABI triplets).
   # ─────────────────────────────────────────────────────────────────────────────
   windows:
