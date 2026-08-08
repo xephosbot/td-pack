@@ -18,6 +18,12 @@ env:
 permissions:
   contents: read
 
+# A re-triggered tag build must not race a running one — release assets and
+# caches would interleave between the two runs.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   #  Detect TDLib version from submodule
@@ -37,6 +43,19 @@ jobs:
           VERSION=$(grep -oP 'project\(TDLib\s+VERSION\s+\K[0-9.]+' td/CMakeLists.txt || echo "unknown")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "TDLib version: $VERSION"
+
+      # The pushed tag must correspond to the TDLib version in the submodule
+      # (v<version> or v<version>-<build> for repackaging without a TDLib bump).
+      # Guards against publishing a release whose tag lies about its contents.
+      - name: Verify tag matches TDLib version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${{ steps.ver.outputs.version }}"
+          if [[ "$TAG" != "v$VERSION" && "$TAG" != "v$VERSION"-* ]]; then
+            echo "ERROR: tag $TAG does not match TDLib version $VERSION (expected v$VERSION or v$VERSION-<build>)"
+            exit 1
+          fi
 
       - name: Prepare versioned td_api.tl
         run: |
@@ -148,10 +167,13 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────────
   #  Linux  (x86_64 + arm64) × (static + JNI) = 4 builds
-  #  Runners:  ubuntu-latest      → x86_64
-  #            ubuntu-24.04-arm   → arm64  (native, no cross-compile)
   #
-  #  JNI builds use clang-18 + libc++ per official TDLib instructions
+  #  Static builds run on ubuntu-latest with the Kotlin/Native GCC 8.3
+  #  toolchains (glibc 2.19 / 2.25) so the archives link against the K/N
+  #  sysroot; arm64 static is a cross-compile (the toolchains are x86_64-hosted).
+  #
+  #  JNI builds link at runtime against the user's glibc, so they build
+  #  natively on modern runners with clang-18 + libc++ per TDLib instructions.
   # ─────────────────────────────────────────────────────────────────────────────
   linux:
     if: github.event_name != 'workflow_dispatch' || inputs.only == 'all' || inputs.only == 'linux'
@@ -164,6 +186,7 @@ jobs:
           - runner:   ubuntu-latest
             target:   tdlib
             platform: linux-x86_64
+            arch:     x86_64
             artifact: tdlib-linux-x86_64
             out:      out/linux/x86_64
 
@@ -173,9 +196,10 @@ jobs:
             artifact: tdlib-linux-jni-x86_64
             out:      out/linux-jni/x86_64
 
-          - runner:   ubuntu-24.04-arm
+          - runner:   ubuntu-latest
             target:   tdlib
             platform: linux-arm64
+            arch:     arm64
             artifact: tdlib-linux-arm64
             out:      out/linux/arm64
 
@@ -210,6 +234,26 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # K/N toolchain + toolchain-built OpenSSL (static only)
+      - name: Cache K/N toolchain
+        if: matrix.target == 'tdlib'
+        uses: actions/cache@v4
+        with:
+          path: third_party/toolchains
+          key: kn-toolchain-linux-${{ matrix.arch }}-gcc8.3
+
+      - name: Cache OpenSSL for Linux
+        if: matrix.target == 'tdlib'
+        id: cache-openssl-linux
+        uses: actions/cache@v4
+        with:
+          path: third_party/openssl/linux
+          key: openssl-linux-${{ matrix.arch }}-${{ hashFiles('scripts/build-openssl-linux.sh', 'scripts/get-linux-toolchain.sh') }}
+
+      - name: Build OpenSSL for Linux (K/N toolchain)
+        if: matrix.target == 'tdlib' && steps.cache-openssl-linux.outputs.cache-hit != 'true'
+        run: ./scripts/build-openssl-linux.sh ${{ matrix.arch }}
+
       - name: Cache ccache
         uses: actions/cache@v4
         with:
@@ -222,12 +266,11 @@ jobs:
           ccache --max-size=2G
           ccache --zero-stats
 
-      - name: Build (static — gcc)
+      # Compilers come from the K/N toolchain inside build.sh (ccache is wired
+      # up via CMAKE_<LANG>_COMPILER_LAUNCHER) — no CC/CXX override here.
+      - name: Build (static — K/N gcc 8.3 toolchain)
         if: matrix.target == 'tdlib'
         run: ./build.sh ${{ matrix.target }} ${{ matrix.platform }}
-        env:
-          CC:  ccache gcc
-          CXX: ccache g++
 
       - name: Build (JNI — clang-18 + libc++)
         if: matrix.target == 'tdlib_jni'
@@ -307,18 +350,18 @@ jobs:
       # The VS generator set this up implicitly; Ninja does not, so import the
       # Developer Command Prompt vars for the target arch.
       - name: Set up MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         with:
           arch: ${{ matrix.vcvars }}
 
       - name: Install CMake + Ninja
-        uses: lukka/get-cmake@latest
+        uses: lukka/get-cmake@591817e96fcad43505fb4eae36172462abb3a42e # v4.3.3
 
       # Compilation cache — the main lever for Windows build time. td wires up
       # ccache itself (RULE_LAUNCH_COMPILE) when it finds it on PATH; this step
       # installs ccache and persists its store across runs via the Actions cache.
       - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2
         with:
           variant: ccache
           key: ccache-${{ matrix.artifact }}
@@ -372,7 +415,7 @@ jobs:
           sudo apt-get install -y make gperf cmake g++ ccache
 
       - name: Setup NDK r27c
-        uses: nttld/setup-ndk@v1
+        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
         id: setup-ndk
         with:
           ndk-version: r27c
@@ -514,6 +557,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Required by actions/attest-build-provenance
+      id-token: write
+      attestations: write
 
     steps:
       - name: Download all artifacts
@@ -548,6 +594,23 @@ jobs:
         run: |
           cp artifacts/td-api-schema/*.tl release/
           echo "  ✓ $(ls release/*.tl)"
+
+      # Checksums manifest — consumers (tdlib-kmp) pin these instead of
+      # querying the GitHub API per asset on every build.
+      - name: Generate SHA256SUMS
+        run: |
+          cd release
+          sha256sum *.tar.zst *.tl > SHA256SUMS
+          cat SHA256SUMS
+
+      # SLSA build provenance: cryptographically links every release asset to
+      # this workflow run. Verify with: gh attestation verify <file> -R ${{ github.repository }}
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            release/*.tar.zst
+            release/*.tl
 
       - name: Verify all 19 packages present
         run: |
@@ -589,16 +652,24 @@ jobs:
           fi
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: v${{ needs.version.outputs.tdlib_version }}
-          name: TDLib ${{ needs.version.outputs.tdlib_version }}
+          # Use the pushed tag verbatim: repackaging the same TDLib version is
+          # a NEW tag (v1.8.65-2), never a rewrite of an existing release —
+          # consumers pin checksums, so released assets must stay immutable.
+          tag_name: ${{ github.ref_name }}
+          name: TDLib ${{ needs.version.outputs.tdlib_version }} (${{ github.ref_name }})
           body: |
             Prebuilt TDLib **${{ needs.version.outputs.tdlib_version }}** libraries for Kotlin Multiplatform.
 
             Download URL pattern:
             ```
-            https://github.com/${{ github.repository }}/releases/download/v${{ needs.version.outputs.tdlib_version }}/{asset}.tar.zst
+            https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/{asset}.tar.zst
+            ```
+
+            All assets are listed in `SHA256SUMS` and have [build provenance attestations](https://github.com/${{ github.repository }}/attestations):
+            ```
+            gh attestation verify <file> -R ${{ github.repository }}
             ```
 
             ---
@@ -653,6 +724,7 @@ jobs:
           files: |
             release/*.tar.zst
             release/*.tl
+            release/SHA256SUMS
           draft: false
           prerelease: false
           make_latest: true

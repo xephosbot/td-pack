@@ -11,3 +11,4 @@ out/
 
 # OpenSSL built locally — not committed
 third_party/openssl/
+third_party/toolchains/

@@ -72,8 +72,14 @@ You can also build locally using the included scripts.
 - Pre-built OpenSSL at `third_party/openssl/macos/<arch>/` — build it with `./scripts/build-openssl-macos.sh` (arm64 + x86_64, from source, no Rosetta)
 
 **Linux:**
-- OpenSSL dev package (`apt install libssl-dev` or equivalent)
+- OpenSSL dev package (`apt install libssl-dev` or equivalent) — used by the host code generator and JNI builds
 - `make`
+- Static (`tdlib`) builds compile with the Kotlin/Native GCC 8.3 toolchains
+  (glibc 2.19 for x86_64, 2.25 for arm64) so the archives link against the
+  K/N sysroot. The toolchain downloads automatically
+  (`scripts/get-linux-toolchain.sh`); build OpenSSL with it first:
+  `./scripts/build-openssl-linux.sh`. Requires an x86_64 Linux host
+  (arm64 is cross-compiled).
 
 **Windows:**
 - Visual Studio 2022
