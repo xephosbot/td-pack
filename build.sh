@@ -177,8 +177,12 @@ prepare_cross_compiling() {
 #   GNU strip  : --strip-unneeded  (keeps globals, removes locals + debug)
 #   Apple strip: -x -S             (-x removes non-globals, -S removes debug)
 # ranlib is re-run afterwards so the archive symbol index stays valid.
+# Cross builds must pass toolchain binutils via STRIP_BIN/RANLIB_BIN — the
+# host strip cannot process foreign-arch archives.
 strip_static_libs() {
   local lib_dir="$1"
+  local strip_bin="${STRIP_BIN:-strip}"
+  local ranlib_bin="${RANLIB_BIN:-ranlib}"
   shopt -s nullglob
   local libs=("$lib_dir"/*.a)
   shopt -u nullglob
@@ -192,11 +196,11 @@ strip_static_libs() {
   before=$(du -sk "$lib_dir" | cut -f1)
 
   for lib in "${libs[@]}"; do
-    if [[ "$(uname)" == "Darwin" ]]; then
+    if [[ "$(uname)" == "Darwin" && "$strip_bin" == "strip" ]]; then
       strip -x -S "$lib" 2>/dev/null && ranlib "$lib" 2>/dev/null \
         || warn "strip/ranlib failed for $(basename "$lib") — kept as-is"
     else
-      strip --strip-unneeded "$lib" 2>/dev/null && ranlib "$lib" 2>/dev/null \
+      "$strip_bin" --strip-unneeded "$lib" 2>/dev/null && "$ranlib_bin" "$lib" 2>/dev/null \
         || warn "strip/ranlib failed for $(basename "$lib") — kept as-is"
     fi
   done
@@ -205,33 +209,51 @@ strip_static_libs() {
   success "Static libs stripped: $((before / 1024)) MB → $((after / 1024)) MB"
 }
 
+# ── Helper: verify Linux archives link against the Kotlin/Native sysroot ──────
+# Tripwire for the exact failure mode that broke consumers: archives built
+# against a modern glibc/libstdc++ reference symbols absent from K/N's bundled
+# sysroot (glibc 2.19/2.25, GCC 8.3). Fails the build if any archive contains
+# an undefined reference to a known-incompatible symbol.
+verify_kn_linkability() {
+  local lib_dir="$1"
+  local nm_bin="$2"
+  local bad_re='__isoc23_|fcntl64|__libc_single_threaded|_ZSt28__throw_bad_array_new_lengthv|_ZNSt19_Sp_make_shared_tag5_S_eqERKSt9type_info'
+
+  banner "Verifying K/N sysroot linkability"
+  local lib offenders=""
+  shopt -s nullglob
+  for lib in "$lib_dir"/*.a; do
+    if "$nm_bin" -u "$lib" 2>/dev/null | grep -qE "$bad_re"; then
+      offenders+=" $(basename "$lib")"
+    fi
+  done
+  shopt -u nullglob
+
+  if [[ -n "$offenders" ]]; then
+    error "Archives reference symbols missing from the K/N sysroot:$offenders\n" \
+          "They were compiled against a too-new glibc/libstdc++. Rebuild with the K/N toolchain."
+  fi
+  success "All archives are K/N sysroot compatible"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Platform-specific build functions
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ── macOS / Linux — Static ─────────────────────────────────────────────────────
-build_desktop_static() {
-  local os="$1"      # macos | linux
-  local arch="$2"    # arm64 | x86_64
+# ── macOS — Static ─────────────────────────────────────────────────────────────
+build_macos_static() {
+  local arch="$1"    # arm64 | x86_64
 
-  local out_dir="$PROJECT_ROOT/out/${os}/${arch}"
-  local build_subdir="$BUILD_DIR/${os}-static-${arch}"
+  local out_dir="$PROJECT_ROOT/out/macos/${arch}"
+  local build_subdir="$BUILD_DIR/macos-static-${arch}"
 
-  banner "Building TDLib static — ${os}/${arch}"
+  banner "Building TDLib static — macos/${arch}"
 
-  local extra_args=()
-
-  if [[ "$os" == "macos" ]]; then
-    # OpenSSL is built from source per-arch (no Homebrew, no Rosetta) by
-    # scripts/build-openssl-macos.sh → third_party/openssl/macos/<arch>.
-    local openssl_root="$PROJECT_ROOT/third_party/openssl/macos/${arch}"
-    [[ -d "$openssl_root" ]] || error "OpenSSL for macos/${arch} not found at $openssl_root.\n" \
-      "Run: ./scripts/build-openssl-macos.sh ${arch}"
-    extra_args+=(
-      "-DOPENSSL_ROOT_DIR=${openssl_root}"
-      "-DCMAKE_OSX_ARCHITECTURES=${arch}"
-    )
-  fi
+  # OpenSSL is built from source per-arch (no Homebrew, no Rosetta) by
+  # scripts/build-openssl-macos.sh → third_party/openssl/macos/<arch>.
+  local openssl_root="$PROJECT_ROOT/third_party/openssl/macos/${arch}"
+  [[ -d "$openssl_root" ]] || error "OpenSSL for macos/${arch} not found at $openssl_root.\n" \
+    "Run: ./scripts/build-openssl-macos.sh ${arch}"
 
   # Release, not MinSizeRel: with td's -ffunction-sections, -Os inlines less →
   # more per-function sections/relocations → larger AND less-compressible .a.
@@ -243,7 +265,8 @@ build_desktop_static() {
         -DCMAKE_CXX_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
         -DTD_ENABLE_JNI=OFF \
         -DOPENSSL_USE_STATIC_LIBS=ON \
-        "${extra_args[@]}" \
+        -DOPENSSL_ROOT_DIR="$openssl_root" \
+        -DCMAKE_OSX_ARCHITECTURES="$arch" \
         2>&1 | sed 's/^/  /'
 
   cmake --build "$build_subdir" \
@@ -261,24 +284,121 @@ build_desktop_static() {
   cp -v "$build_subdir"/*/*.a "$out_dir/lib" 2>/dev/null || true
 
   # Copy OpenSSL static libraries
-  if [[ "$os" == "macos" ]]; then
-    cp -v "$openssl_root/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
-    cp -v "$openssl_root/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
-  else
-    # Linux: bundle the system static OpenSSL + zlib (.a) so the archive is
-    # self-contained — the consumer links TDLib without needing -lssl/-lz.
-    for d in /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/lib; do
-      if [[ -f "$d/libcrypto.a" ]]; then
-        cp -v "$d/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
-        cp -v "$d/libssl.a" "$out_dir/lib" 2>/dev/null || true
-        [[ -f "$d/libz.a" ]] && cp -v "$d/libz.a" "$out_dir/lib" 2>/dev/null || true
-        break
-      fi
-    done
-  fi
+  cp -v "$openssl_root/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
+  cp -v "$openssl_root/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
 
   # Strip local symbols/debug from all .a (incl. OpenSSL) to shrink the archive
   strip_static_libs "$out_dir/lib"
+
+  # Copy specific headers
+  cp -v "$build_subdir/td/telegram/tdjson_export.h" "$out_dir/include/td/telegram" 2>/dev/null || true
+  cp -v "$TD_DIR/td/telegram/td_json_client.h" "$out_dir/include" 2>/dev/null || true
+  cp -v "$TD_DIR/td/telegram/td_log.h" "$out_dir/include" 2>/dev/null || true
+
+  success "Static build complete → $out_dir"
+}
+
+# ── Linux — Static (Kotlin/Native toolchain) ───────────────────────────────────
+# Built with the exact GCC 8.3 toolchains K/N bundles (glibc 2.19 for x86_64,
+# 2.25 for aarch64) so the archives link against the K/N sysroot. Both
+# toolchains are x86_64-hosted; the aarch64 build is a cross-compile.
+build_linux_static() {
+  local arch="$1"    # x86_64 | arm64
+
+  local triple cmake_proc
+  case "$arch" in
+    x86_64) triple="x86_64-unknown-linux-gnu";  cmake_proc="x86_64"  ;;
+    arm64)  triple="aarch64-unknown-linux-gnu"; cmake_proc="aarch64" ;;
+    *) error "Unsupported Linux arch: $arch" ;;
+  esac
+
+  local out_dir="$PROJECT_ROOT/out/linux/${arch}"
+  local build_subdir="$BUILD_DIR/linux-static-${arch}"
+
+  banner "Building TDLib static — linux/${arch} (K/N toolchain, gcc 8.3)"
+
+  local toolchain
+  toolchain="$("$PROJECT_ROOT/scripts/get-linux-toolchain.sh" "$arch")"
+  local sysroot="$toolchain/$triple/sysroot"
+
+  # OpenSSL must be built with the same toolchain (scripts/build-openssl-linux.sh);
+  # the system libssl-dev is compiled against the runner's modern glibc.
+  local openssl_root="$PROJECT_ROOT/third_party/openssl/linux/${arch}"
+  [[ -f "$openssl_root/lib/libcrypto.a" ]] || error "OpenSSL for linux/${arch} not found at $openssl_root.\n" \
+    "Run: ./scripts/build-openssl-linux.sh ${arch}"
+
+  # Setting CMAKE_SYSTEM_NAME marks the build as cross-compiling (even for
+  # x86_64→x86_64), so td needs its code generators prepared on the host first.
+  prepare_cross_compiling
+
+  mkdir -p "$build_subdir"
+  local toolchain_file="$build_subdir/kn-toolchain.cmake"
+  cat > "$toolchain_file" <<EOF
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR ${cmake_proc})
+set(CMAKE_C_COMPILER ${toolchain}/bin/${triple}-gcc)
+set(CMAKE_CXX_COMPILER ${toolchain}/bin/${triple}-g++)
+set(CMAKE_AR ${toolchain}/bin/${triple}-ar)
+set(CMAKE_RANLIB ${toolchain}/bin/${triple}-ranlib)
+set(CMAKE_STRIP ${toolchain}/bin/${triple}-strip)
+# Libraries/headers come from the toolchain sysroot (zlib) and our OpenSSL;
+# build tools (gperf, make) come from the host.
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH "${sysroot}" "${openssl_root}")
+EOF
+
+  # ccache via launcher (CC/CXX stay clean toolchain paths for CMake).
+  local launcher_args=()
+  if command -v ccache &>/dev/null; then
+    launcher_args+=(
+      "-DCMAKE_C_COMPILER_LAUNCHER=ccache"
+      "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+    )
+  fi
+
+  cmake -S "$TD_DIR" \
+        -B "$build_subdir" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$STATIC_RELEASE_FLAGS" \
+        -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
+        -DTD_ENABLE_JNI=OFF \
+        -DOPENSSL_USE_STATIC_LIBS=ON \
+        -DOPENSSL_ROOT_DIR="$openssl_root" \
+        -DOPENSSL_CRYPTO_LIBRARY="$openssl_root/lib/libcrypto.a" \
+        -DOPENSSL_SSL_LIBRARY="$openssl_root/lib/libssl.a" \
+        -DOPENSSL_INCLUDE_DIR="$openssl_root/include" \
+        "${launcher_args[@]}" \
+        2>&1 | sed 's/^/  /'
+
+  cmake --build "$build_subdir" \
+        --target tdjson_static \
+        --config Release \
+        -j"$NPROC" \
+        2>&1 | sed 's/^/  /'
+
+  # Manual copy of artifacts
+  mkdir -p "$out_dir/lib"
+  mkdir -p "$out_dir/include/td/telegram"
+
+  # Copy all .a files from build dir (1 and 2 levels deep)
+  cp -v "$build_subdir"/*.a "$out_dir/lib" 2>/dev/null || true
+  cp -v "$build_subdir"/*/*.a "$out_dir/lib" 2>/dev/null || true
+
+  # OpenSSL (K/N-toolchain build) + zlib straight from the K/N sysroot, so the
+  # archive stays self-contained for C/C++ consumers.
+  cp -v "$openssl_root/lib/libcrypto.a" "$out_dir/lib" 2>/dev/null || true
+  cp -v "$openssl_root/lib/libssl.a" "$out_dir/lib" 2>/dev/null || true
+  cp -v "$sysroot/usr/lib/libz.a" "$out_dir/lib" 2>/dev/null || true
+
+  # Strip with the toolchain binutils (host strip can't touch aarch64 archives)
+  STRIP_BIN="$toolchain/bin/${triple}-strip" \
+  RANLIB_BIN="$toolchain/bin/${triple}-ranlib" \
+  strip_static_libs "$out_dir/lib"
+
+  verify_kn_linkability "$out_dir/lib" "$toolchain/bin/${triple}-nm"
 
   # Copy specific headers
   cp -v "$build_subdir/td/telegram/tdjson_export.h" "$out_dir/include/td/telegram" 2>/dev/null || true
@@ -534,7 +654,7 @@ case "$PLATFORM" in
   # ── macOS ──────────────────────────────────────────────────────────────────
   macos-arm64)
     if [[ "$TARGET" == "tdlib" ]]; then
-      build_desktop_static macos arm64
+      build_macos_static arm64
     else
       apply_patch
       build_desktop_jni macos arm64
@@ -543,7 +663,7 @@ case "$PLATFORM" in
 
   macos-x86_64)
     if [[ "$TARGET" == "tdlib" ]]; then
-      build_desktop_static macos x86_64
+      build_macos_static x86_64
     else
       apply_patch
       build_desktop_jni macos x86_64
@@ -553,7 +673,7 @@ case "$PLATFORM" in
   # ── Linux ──────────────────────────────────────────────────────────────────
   linux-x86_64)
     if [[ "$TARGET" == "tdlib" ]]; then
-      build_desktop_static linux x86_64
+      build_linux_static x86_64
     else
       apply_patch
       build_desktop_jni linux x86_64
@@ -562,7 +682,7 @@ case "$PLATFORM" in
 
   linux-arm64)
     if [[ "$TARGET" == "tdlib" ]]; then
-      build_desktop_static linux arm64
+      build_linux_static arm64
     else
       apply_patch
       build_desktop_jni linux arm64
